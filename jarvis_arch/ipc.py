@@ -73,6 +73,10 @@ class JarvisIPCServer:
                     conn, _ = server.accept()
                 except socket.timeout:
                     continue
+                except OSError:
+                    if self._stop.is_set():
+                        break
+                    raise
                 thread = threading.Thread(
                     target=self._handle_connection,
                     args=(conn,),

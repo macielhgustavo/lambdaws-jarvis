@@ -20,8 +20,8 @@ jobs:
       - name: Sync
         run: uv sync
       - name: Compile
-        run: uv run python -m py_compile core.py jarvis_cli.py jarvis_gui.py test_core.py test_gui.py test_architecture.py jarvis_arch/*.py
+        run: uv run python -m py_compile core.py jarvis_cli.py jarvis_gui.py jarvis_daemon.py test_core.py test_gui.py test_architecture.py test_ipc.py jarvis_arch/*.py
       - name: Unit tests
         env:
           QT_QPA_PLATFORM: offscreen
-        run: uv run python -m unittest -q test_core.py test_gui.py test_architecture.py
+        run: uv run python -m unittest -q test_core.py test_gui.py test_architecture.py test_ipc.py

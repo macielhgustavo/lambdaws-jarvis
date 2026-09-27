@@ -29,7 +29,7 @@ CLI ou runtime.
 ## Instalar ou atualizar
 
 ```bash
-./setup-jarvis-v10.sh
+./setup-jarvis-v11.sh
 ```
 
 O instalador sincroniza dependencias, valida o codigo, cria os atalhos
@@ -62,11 +62,11 @@ Os novos componentes vivem em `jarvis_arch/`.
 
 ## Próximos passos
 
-1. daemon local único + API IPC para GUI/CLI/voz;
-2. provider local com tool calling;
-3. contexto e memória em SQLite;
-4. pipeline de voz realtime com wake word, VAD, STT e TTS;
-5. integrações KDE/D-Bus e automações proativas.
+1. provider local com tool calling;
+2. memória/contexto em SQLite;
+3. pipeline de voz realtime com wake word, VAD, STT e TTS;
+4. integrações KDE/D-Bus e automações proativas;
+5. clientes extras sobre o daemon (overlay/web/mobile).
 
 ## Dados locais
 

@@ -6,6 +6,7 @@ from rich.markdown import Markdown
 from rich.prompt import Confirm, Prompt
 
 from core import VERSION, Jarvis, recall_memory, system_info
+from jarvis_arch.client import connect_remote
 
 console = Console()
 
@@ -23,7 +24,7 @@ def confirm(message):
     )
 
 
-agent = Jarvis(confirm)
+agent = connect_remote(confirm) or Jarvis(confirm)
 
 
 def main():

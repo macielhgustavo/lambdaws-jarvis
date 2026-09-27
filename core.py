@@ -10,7 +10,9 @@ from pathlib import Path
 
 from groq import Groq
 
-VERSION = "10.0.0"
+from jarvis_arch import AgentRuntime, GroqProvider, OllamaProvider, ToolRegistry
+
+VERSION = "11.0.0"
 HOME = Path.home().resolve()
 
 BASE = HOME / ".local/share/lambdaws-jarvis"
@@ -917,236 +919,92 @@ TOOLS = [
 # AGENT
 # ==========================================================
 
+def build_tool_registry(confirm_callback):
+    """Compose the workstation capabilities exposed to the agent runtime."""
+
+    handlers = {
+        "system_info": system_info,
+        "list_directory": list_directory,
+        "remember": lambda **args: remember(confirm=confirm_callback, **args),
+        "recall_memory": recall_memory,
+        "read_text_file": read_text_file,
+        "git_status": git_status,
+        "git_log": git_log,
+        "open_application": open_application,
+        "open_url": open_url,
+        "web_search": web_search,
+        "write_text_file": lambda **args: write_text_file(
+            confirm=confirm_callback, **args
+        ),
+        "create_directory": lambda **args: create_directory(
+            confirm=confirm_callback, **args
+        ),
+        "git_action": lambda **args: git_action(
+            confirm=confirm_callback, **args
+        ),
+    }
+
+    categories = {
+        "system_info": "system",
+        "list_directory": "files",
+        "read_text_file": "files",
+        "write_text_file": "files",
+        "create_directory": "files",
+        "git_status": "git",
+        "git_log": "git",
+        "git_action": "git",
+        "open_application": "desktop",
+        "open_url": "desktop",
+        "web_search": "web",
+        "remember": "memory",
+        "recall_memory": "memory",
+    }
+
+    registry = ToolRegistry()
+    for schema in TOOLS:
+        name = schema["function"]["name"]
+        registry.register_schema(
+            schema,
+            handlers[name],
+            category=categories.get(name, "general"),
+        )
+    return registry
+
+
 class Jarvis:
+    """Compatibility facade over the v11 modular agent runtime."""
 
     def __init__(self, confirm_callback):
-
         self.confirm = confirm_callback
-
-        api_key = os.environ.get("GROQ_API_KEY")
-        try:
-            self.client = Groq(api_key=api_key) if api_key else None
-        except (TypeError, ValueError, OSError):
-            self.client = None
-
-        self.history = load_history()
-
-
-    def execute_tool(self, name, args):
-
-        if name == "system_info":
-            return system_info()
-
-        if name == "list_directory":
-            return list_directory(**args)
-
-        if name == "read_text_file":
-            return read_text_file(**args)
-
-        if name == "git_status":
-            return git_status(**args)
-
-        if name == "git_log":
-            return git_log(**args)
-
-        if name == "open_application":
-            return open_application(**args)
-
-        if name == "open_url":
-            return open_url(**args)
-
-        if name == "web_search":
-            return web_search(**args)
-
-        if name == "write_text_file":
-            return write_text_file(
-                confirm=self.confirm,
-                **args
-            )
-
-        if name == "create_directory":
-            return create_directory(
-                confirm=self.confirm,
-                **args
-            )
-
-        if name == "remember":
-            return remember(
-                confirm=self.confirm,
-                **args
-            )
-
-        if name == "recall_memory":
-            return recall_memory(**args)
-
-        if name == "git_action":
-            return git_action(
-                confirm=self.confirm,
-                **args
-            )
-
-        return {
-            "error": f"Ferramenta desconhecida: {name}"
-        }
-
-
-    def local_fallback(self, prompt):
-
-        try:
-
-            output = subprocess.check_output(
-                [
-                    "ollama",
-                    "run",
-                    LOCAL_MODEL,
-                    prompt
-                ],
-                text=True,
-                stderr=subprocess.STDOUT,
-                timeout=180
-            )
-
-            return output.strip(), "Ollama · Qwen3 4B"
-
-        except (OSError, subprocess.SubprocessError) as e:
-
-            return (
-                f"Groq e Ollama indisponíveis: {e}",
-                "offline"
-            )
-
-
-    def ask(self, prompt):
-
-        prompt = str(prompt).strip()
-        if not prompt:
-            return "Escreva uma pergunta ou ordem para o Jarvis.", "local"
-
-        if self.client is None:
-            return self.local_fallback(prompt)
-
-        messages = [
-            {
-                "role": "system",
-                "content": SYSTEM
-            }
-        ]
-
-        messages.extend(
-            self.history[-24:]
+        self.tools = build_tool_registry(confirm_callback)
+        self.cloud = GroqProvider(os.environ.get("GROQ_API_KEY"), MODEL)
+        self.local = OllamaProvider(LOCAL_MODEL)
+        self.runtime = AgentRuntime(
+            system_prompt=SYSTEM,
+            cloud=self.cloud,
+            local=self.local,
+            tools=self.tools,
+            history=load_history(),
+            save_history=save_history,
+            max_steps=MAX_AGENT_STEPS,
+            history_window=24,
         )
 
-        messages.append({
-            "role": "user",
-            "content": prompt
-        })
+        # Public attributes kept for CLI/GUI and third-party compatibility.
+        self.history = self.runtime.history
+        self.client = self.cloud.client
 
+    def execute_tool(self, name, args):
         try:
+            return self.tools.execute(name, args)
+        except KeyError:
+            return {"error": f"Ferramenta desconhecida: {name}"}
 
-            for _ in range(MAX_AGENT_STEPS):
+    def local_fallback(self, prompt):
+        return self.runtime._fallback(prompt)
 
-                response = self.client.chat.completions.create(
-
-                    model=MODEL,
-
-                    messages=messages,
-
-                    tools=TOOLS,
-
-                    tool_choice="auto",
-
-                    reasoning_effort="low"
-                )
-
-                msg = response.choices[0].message
-
-                entry = {
-                    "role": "assistant",
-                    "content": msg.content or ""
-                }
-
-                if msg.tool_calls:
-
-                    entry["tool_calls"] = [
-
-                        {
-                            "id": call.id,
-                            "type": "function",
-                            "function": {
-                                "name": call.function.name,
-                                "arguments":
-                                    call.function.arguments
-                            }
-                        }
-
-                        for call in msg.tool_calls
-                    ]
-
-                messages.append(entry)
-
-                if not msg.tool_calls:
-
-                    answer = msg.content or ""
-
-                    self.history.extend([
-                        {
-                            "role": "user",
-                            "content": prompt
-                        },
-                        {
-                            "role": "assistant",
-                            "content": answer
-                        }
-                    ])
-
-                    save_history(self.history)
-
-                    return (
-                        answer,
-                        "Groq · GPT-OSS 120B"
-                    )
-
-                for call in msg.tool_calls:
-
-                    try:
-
-                        args = json.loads(
-                            call.function.arguments or "{}"
-                        )
-
-                    except (TypeError, ValueError):
-
-                        args = {}
-
-                    try:
-                        result = self.execute_tool(
-                            call.function.name,
-                            args
-                        )
-                    except Exception as error:  # noqa: BLE001 - tool isolation
-                        result = {"error": str(error)}
-
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": call.id,
-                        "content": json.dumps(
-                            result,
-                            ensure_ascii=False,
-                            default=str
-                        )
-                    })
-
-            return (
-                "Limite de etapas do agente atingido.",
-                "Groq"
-            )
-
-        except Exception:  # noqa: BLE001 - offline fallback for API errors
-
-            return self.local_fallback(prompt)
-
+    def ask(self, prompt):
+        return self.runtime.ask(prompt)
 
     def clear(self):
-
-        self.history.clear()
-        save_history([])
+        self.runtime.clear()

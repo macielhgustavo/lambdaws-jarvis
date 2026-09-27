@@ -37,6 +37,7 @@ from PySide6.QtWidgets import (
 )
 
 from core import VERSION, Jarvis, recall_memory, _atomic_write
+from jarvis_arch.client import connect_remote
 
 STYLE = """
 QWidget { background: #111617; color: #edf2ee; font-family: "DejaVu Sans";
@@ -251,7 +252,13 @@ class Window(QWidget):
         self.resize(1120, 800)
         self.setStyleSheet(STYLE)
         self.confirmation = ConfirmationBridge(self)
-        self.agent = agent if agent is not None else Jarvis(self.confirmation.ask)
+        if agent is not None:
+            self.agent = agent
+        else:
+            self.agent = (
+                connect_remote(self.confirmation.ask)
+                or Jarvis(self.confirmation.ask)
+            )
         self.build_ui()
         self.pulse = QTimer(self)
         self.pulse.setInterval(1000)

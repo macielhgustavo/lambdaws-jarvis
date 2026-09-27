@@ -1,12 +1,30 @@
 # LambdaWS Jarvis
 
-Assistente local em Python com interface de terminal e interface grafica em PySide6.
+Assistente pessoal local-first para a workstation LambdaWS, com interface de
+terminal e desktop em PySide6.
+
+## Estado atual — v11
+
+A v11 inicia a transição do Jarvis de um assistente monolítico para uma
+plataforma modular:
+
+- `AgentRuntime`: loop agentic independente de GUI/CLI;
+- `ToolRegistry`: registro explícito de capacidades, sem dispatcher monolítico;
+- `GroqProvider` e `OllamaProvider`: providers desacoplados do runtime;
+- `EventBus`: contrato inicial para voz, daemon, scheduler e automações futuras;
+- camada de compatibilidade em `core.Jarvis`, preservando os clientes atuais.
+
+O comportamento da v10 foi mantido: Groq continua sendo o provider agentic
+principal e Ollama/Qwen3 4B continua sendo o fallback local de texto. A nova
+arquitetura permite evoluir o fallback local para tool calling sem alterar GUI,
+CLI ou runtime.
 
 ## Requisitos
 
 - Python 3.14+
 - uv
 - Chave da Groq configurada fora do repositorio
+- Ollama opcional para fallback local
 
 ## Instalar ou atualizar
 
@@ -14,7 +32,8 @@ Assistente local em Python com interface de terminal e interface grafica em PySi
 ./setup-jarvis-v10.sh
 ```
 
-O instalador sincroniza dependencias, valida o codigo, cria os atalhos `jarvis` e `jarvis-ui`, e registra o atalho de desktop.
+O instalador sincroniza dependencias, valida o codigo, cria os atalhos
+`jarvis` e `jarvis-ui`, e registra o atalho de desktop.
 
 ## Uso
 
@@ -22,6 +41,32 @@ O instalador sincroniza dependencias, valida o codigo, cria os atalhos `jarvis` 
 jarvis
 jarvis-ui
 ```
+
+## Arquitetura
+
+```text
+CLI / GUI
+    |
+core.Jarvis          <- facade compatível
+    |
+AgentRuntime
+    |------ GroqProvider
+    |------ OllamaProvider
+    |------ ToolRegistry
+    |------ History
+    |
+EventBus             <- base para serviços futuros
+```
+
+Os novos componentes vivem em `jarvis_arch/`.
+
+## Próximos passos
+
+1. daemon local único + API IPC para GUI/CLI/voz;
+2. provider local com tool calling;
+3. contexto e memória em SQLite;
+4. pipeline de voz realtime com wake word, VAD, STT e TTS;
+5. integrações KDE/D-Bus e automações proativas.
 
 ## Dados locais
 

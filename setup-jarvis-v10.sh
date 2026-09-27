@@ -34,7 +34,7 @@ ok "Backup em $BACKUP"
 info "Sincronizando dependências da V11..."
 uv sync --directory "$BASE"
 
-info "Validando o núcleo..."
+info "Validando a arquitetura e o núcleo..."
 uv run --directory "$BASE" python -m py_compile \
     core.py jarvis_cli.py jarvis_gui.py test_core.py test_gui.py test_architecture.py jarvis_arch/*.py
 uv run --directory "$BASE" python -m unittest -q test_core.py test_gui.py test_architecture.py
@@ -65,7 +65,7 @@ StartupNotify=true
 EOF
 chmod 644 "$APPS/lambdaws-jarvis.desktop"
 
-ok "Jarvis V10 instalado sem alterar a credencial"
+ok "Jarvis V11 instalado sem alterar a credencial"
 echo
 echo "Terminal: jarvis"
 echo "Interface: jarvis-ui"

@@ -1,0 +1,12 @@
+.venv/
+.ruff_cache/
+__pycache__/
+*.py[cod]
+
+backups/
+data/
+*.log
+
+.env
+secrets.env
+*.secret

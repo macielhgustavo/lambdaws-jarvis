@@ -15,7 +15,7 @@ class FakeCloud:
         self.calls = []
 
     def complete(self, messages, tools, *, reasoning_effort="low"):
-        self.calls.append((messages, tools, reasoning_effort))
+        self.calls.append(([dict(item) for item in messages], list(tools), reasoning_effort))
         if not self.turns:
             raise ProviderUnavailable("sem resposta")
         return self.turns.pop(0)

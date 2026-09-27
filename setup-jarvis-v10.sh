@@ -16,19 +16,20 @@ command -v uv >/dev/null 2>&1 || fail "uv não encontrado."
 BASE="$HOME/.local/share/lambdaws-jarvis"
 BIN="$HOME/.local/bin"
 APPS="$HOME/.local/share/applications"
+SYSTEMD="$HOME/.config/systemd/user"
 BACKUP="$BASE/backups/v11-$(date +%Y%m%d-%H%M%S)"
 
 [[ -d "$BASE" ]] || fail "Instalação do Jarvis não encontrada em $BASE."
 
-for file in core.py jarvis_cli.py jarvis_gui.py pyproject.toml test_core.py test_gui.py test_architecture.py; do
+for file in core.py jarvis_cli.py jarvis_gui.py jarvis_daemon.py pyproject.toml test_core.py test_gui.py test_architecture.py test_ipc.py; do
     [[ -f "$BASE/$file" ]] || fail "Arquivo ausente: $BASE/$file"
 done
 
 info "Criando backup recuperável da instalação atual..."
 mkdir -p "$BACKUP"
-cp -a "$BASE/core.py" "$BASE/jarvis_cli.py" "$BASE/jarvis_gui.py" \
+cp -a "$BASE/core.py" "$BASE/jarvis_cli.py" "$BASE/jarvis_gui.py" "$BASE/jarvis_daemon.py" \
     "$BASE/pyproject.toml" "$BASE/test_core.py" "$BASE/test_gui.py" \
-    "$BASE/test_architecture.py" "$BASE/jarvis_arch" "$BACKUP/"
+    "$BASE/test_architecture.py" "$BASE/test_ipc.py" "$BASE/jarvis_arch" "$BACKUP/"
 ok "Backup em $BACKUP"
 
 info "Sincronizando dependências da V11..."
@@ -36,8 +37,8 @@ uv sync --directory "$BASE"
 
 info "Validando a arquitetura e o núcleo..."
 uv run --directory "$BASE" python -m py_compile \
-    core.py jarvis_cli.py jarvis_gui.py test_core.py test_gui.py test_architecture.py jarvis_arch/*.py
-uv run --directory "$BASE" python -m unittest -q test_core.py test_gui.py test_architecture.py
+    core.py jarvis_cli.py jarvis_gui.py jarvis_daemon.py test_core.py test_gui.py test_architecture.py test_ipc.py jarvis_arch/*.py
+uv run --directory "$BASE" python -m unittest -q test_core.py test_gui.py test_architecture.py test_ipc.py
 ok "Arquitetura e núcleo validados"
 
 info "Atualizando os atalhos..."
@@ -50,7 +51,30 @@ cat > "$BIN/jarvis-ui" <<EOF
 #!/usr/bin/env bash
 exec uv run --directory "$BASE" python "$BASE/jarvis_gui.py"
 EOF
-chmod 755 "$BIN/jarvis" "$BIN/jarvis-ui"
+cat > "$BIN/jarvisd" <<EOF
+#!/usr/bin/env bash
+exec uv run --directory "$BASE" python "$BASE/jarvis_daemon.py"
+EOF
+chmod 755 "$BIN/jarvis" "$BIN/jarvis-ui" "$BIN/jarvisd"
+
+mkdir -p "$SYSTEMD"
+cat > "$SYSTEMD/lambdaws-jarvis.service" <<EOF
+[Unit]
+Description=LambdaWS Jarvis daemon
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=$BIN/jarvisd
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target
+EOF
+
+systemctl --user daemon-reload
+systemctl --user enable --now lambdaws-jarvis.service
 
 cat > "$APPS/lambdaws-jarvis.desktop" <<EOF
 [Desktop Entry]

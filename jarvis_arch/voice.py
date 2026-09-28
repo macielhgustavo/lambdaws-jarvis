@@ -162,11 +162,15 @@ class OpenWakeWordDetector:
         configured = str(self.model_path or "hey jarvis").strip()
         path = Path(configured).expanduser()
         if path.is_file():
-            self._model = module.Model(wakeword_models=[str(path)])
+            self._model = module.Model(
+                wakeword_models=[str(path)],
+                inference_framework="onnx",
+            )
         else:
-            # Loading the packaged pretrained set keeps "hey jarvis" usable
-            # without shipping model binaries inside this repository.
-            self._model = module.Model()
+            self._model = module.Model(
+                wakeword_models=[configured.replace("_", " ")],
+                inference_framework="onnx",
+            )
         return self._model
 
     def detected(self, frame: bytes) -> bool:

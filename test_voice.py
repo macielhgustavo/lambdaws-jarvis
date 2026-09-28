@@ -91,6 +91,20 @@ class VoiceTests(unittest.TestCase):
         self.assertEqual(speaker.spoken, ["resposta:como está o pc"])
         self.assertTrue(source.closed)
 
+    def test_detector_loads_only_jarvis_with_onnx(self):
+        detector = OpenWakeWordDetector("hey jarvis", threshold=0.5)
+
+        class Module:
+            class Model:
+                def __init__(self, **kwargs):
+                    self.kwargs = kwargs
+
+        with patch("jarvis_arch.voice.importlib.import_module", return_value=Module):
+            model = detector._load()
+
+        self.assertEqual(model.kwargs["wakeword_models"], ["hey jarvis"])
+        self.assertEqual(model.kwargs["inference_framework"], "onnx")
+
     def test_detector_matches_jarvis_label(self):
         detector = OpenWakeWordDetector("hey jarvis", threshold=0.5)
         class Model:

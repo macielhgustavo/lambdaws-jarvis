@@ -13,7 +13,7 @@ mkdir -p "$CONFIG" "$SYSTEMD"
 uv python install 3.12
 uv venv "$VOICE_VENV" --python 3.12
 uv pip install --python "$VOICE_VENV/bin/python" \
-  groq faster-whisper piper-tts \
+  groq faster-whisper piper-tts scipy scikit-learn \
   "openwakeword @ git+https://github.com/dscripka/openWakeWord.git@v0.5.1"
 
 "$VOICE_VENV/bin/python" - <<'PY'

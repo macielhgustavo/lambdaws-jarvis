@@ -1,6 +1,7 @@
 """Architecture primitives for LambdaWS Jarvis."""
 
 from .client import DaemonUnavailable, RemoteJarvis, connect_remote
+from .context import project_context, workstation_context
 from .events import EventBus
 from .memory import MemoryStore
 from .providers import GroqProvider, OllamaProvider, ProviderUnavailable
@@ -11,6 +12,8 @@ __all__ = [
     "AgentRuntime",
     "DaemonUnavailable",
     "EventBus",
+    "project_context",
+    "workstation_context",
     "GroqProvider",
     "MemoryStore",
     "RemoteJarvis",

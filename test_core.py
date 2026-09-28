@@ -15,11 +15,13 @@ class CoreSafetyTests(unittest.TestCase):
             "DATA": core.DATA,
             "HISTORY_FILE": core.HISTORY_FILE,
             "MEMORY_FILE": core.MEMORY_FILE,
+            "DB_FILE": core.DB_FILE,
         }
         core.HOME = self.root
         core.DATA = self.root / "data"
         core.HISTORY_FILE = core.DATA / "history.json"
         core.MEMORY_FILE = core.DATA / "memory.json"
+        core.DB_FILE = core.DATA / "jarvis.db"
 
     def tearDown(self):
         for name, value in self.previous.items():
@@ -34,7 +36,7 @@ class CoreSafetyTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             core.safe_path(".ssh/id_ed25519")
 
-    def test_history_is_validated_and_written_private(self):
+    def test_history_is_validated_and_written_private_to_sqlite(self):
         core.save_history([
             {"role": "user", "content": "ok"},
             {"role": "system", "content": "discard"},
@@ -47,22 +49,32 @@ class CoreSafetyTests(unittest.TestCase):
                 {"role": "assistant", "content": "resposta"},
             ],
         )
-        mode = stat.S_IMODE(core.HISTORY_FILE.stat().st_mode)
+        database = core.DATA / "jarvis.db"
+        self.assertTrue(database.exists())
+        mode = stat.S_IMODE(database.stat().st_mode)
         self.assertEqual(mode, 0o600)
 
     def test_memory_requires_confirmation(self):
         denied = core.remember("editor", "neovim", lambda _: False)
         self.assertEqual(denied, {"cancelled": True})
-        self.assertFalse(core.MEMORY_FILE.exists())
+        self.assertFalse((core.DATA / "jarvis.db").exists())
 
         saved = core.remember("editor", "neovim", lambda _: True)
         self.assertTrue(saved["success"])
         self.assertEqual(core.recall_memory("NEO")["memory"]["editor"]["value"], "neovim")
 
-    def test_memory_query_tolerates_legacy_values(self):
+    def test_memory_migrates_legacy_values(self):
         core.MEMORY_FILE.parent.mkdir(parents=True, exist_ok=True)
         core.MEMORY_FILE.write_text('{"idioma": "pt-BR"}', encoding="utf-8")
         self.assertIn("idioma", core.recall_memory("pt")["memory"])
+
+    def test_history_migrates_legacy_json(self):
+        core.HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
+        core.HISTORY_FILE.write_text(
+            '[{"role":"user","content":"antigo"},{"role":"assistant","content":"ok"}]',
+            encoding="utf-8",
+        )
+        self.assertEqual(core.load_history()[-1]["content"], "ok")
 
     def test_git_action_validates_required_argument(self):
         result = core.git_action(str(self.root), "commit", "", lambda _: True)

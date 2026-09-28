@@ -6,10 +6,9 @@ from jarvis_arch.runtime import AgentRuntime
 from jarvis_arch.tools import ToolRegistry, ToolSpec
 
 
-class FakeCloud:
-    name = "fake-cloud"
-
-    def __init__(self, turns, available=True):
+class FakeProvider:
+    def __init__(self, name, turns, available=True):
+        self.name = name
         self.turns = list(turns)
         self.available = available
         self.calls = []
@@ -21,19 +20,23 @@ class FakeCloud:
         return self.turns.pop(0)
 
 
-class FakeLocal:
-    name = "fake-local"
-
-    def __init__(self, answer="fallback"):
-        self.answer = answer
-        self.prompts = []
-
-    def generate(self, prompt):
-        self.prompts.append(prompt)
-        return self.answer
-
-
 class ArchitectureTests(unittest.TestCase):
+    def registry(self):
+        registry = ToolRegistry()
+        registry.register(
+            ToolSpec(
+                name="echo",
+                description="eco",
+                parameters={
+                    "type": "object",
+                    "properties": {"value": {"type": "string"}},
+                    "required": ["value"],
+                },
+                handler=lambda value: {"echo": value},
+            )
+        )
+        return registry
+
     def test_tool_registry_exposes_schema_and_executes_handler(self):
         registry = ToolRegistry()
         registry.register(
@@ -57,35 +60,23 @@ class ArchitectureTests(unittest.TestCase):
         self.assertEqual(registry.names(), ("sum",))
 
     def test_runtime_executes_tool_then_returns_final_answer(self):
-        registry = ToolRegistry()
-        registry.register(
-            ToolSpec(
-                name="echo",
-                description="eco",
-                parameters={
-                    "type": "object",
-                    "properties": {"value": {"type": "string"}},
-                    "required": ["value"],
-                },
-                handler=lambda value: {"echo": value},
-            )
-        )
-        cloud = FakeCloud(
+        cloud = FakeProvider(
+            "fake-cloud",
             [
                 AssistantTurn(
                     content="",
                     tool_calls=[ToolCall(id="1", name="echo", arguments='{"value":"oi"}')],
                 ),
                 AssistantTurn(content="feito", tool_calls=[]),
-            ]
+            ],
         )
-        local = FakeLocal()
+        local = FakeProvider("fake-local", [])
         saved = []
         runtime = AgentRuntime(
             system_prompt="system",
             cloud=cloud,
             local=local,
-            tools=registry,
+            tools=self.registry(),
             history=[],
             save_history=lambda history: saved.append(list(history)),
         )
@@ -99,16 +90,45 @@ class ArchitectureTests(unittest.TestCase):
         self.assertEqual(second_messages[-1]["role"], "tool")
         self.assertIn('"echo": "oi"', second_messages[-1]["content"])
 
-    def test_runtime_falls_back_when_cloud_is_unavailable(self):
+    def test_runtime_local_fallback_keeps_tool_calling(self):
+        cloud = FakeProvider("fake-cloud", [], available=False)
+        local = FakeProvider(
+            "fake-local",
+            [
+                AssistantTurn(
+                    content="",
+                    tool_calls=[ToolCall(id="local-1", name="echo", arguments='{"value":"local"}')],
+                ),
+                AssistantTurn(content="local-feito", tool_calls=[]),
+            ],
+        )
         runtime = AgentRuntime(
             system_prompt="system",
-            cloud=FakeCloud([], available=False),
-            local=FakeLocal("local-ok"),
+            cloud=cloud,
+            local=local,
+            tools=self.registry(),
+            history=[],
+            save_history=lambda _: None,
+        )
+
+        self.assertEqual(runtime.ask("oi"), ("local-feito", "fake-local"))
+        self.assertEqual(local.calls[1][0][-1]["role"], "tool")
+
+    def test_runtime_falls_back_after_cloud_provider_error(self):
+        cloud = FakeProvider("fake-cloud", [])
+        local = FakeProvider(
+            "fake-local",
+            [AssistantTurn(content="recuperado", tool_calls=[])],
+        )
+        runtime = AgentRuntime(
+            system_prompt="system",
+            cloud=cloud,
+            local=local,
             tools=ToolRegistry(),
             history=[],
             save_history=lambda _: None,
         )
-        self.assertEqual(runtime.ask("oi"), ("local-ok", "fake-local"))
+        self.assertEqual(runtime.ask("oi"), ("recuperado", "fake-local"))
 
     def test_event_bus_subscribe_publish_and_unsubscribe(self):
         bus = EventBus()

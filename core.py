@@ -11,8 +11,9 @@ from pathlib import Path
 from groq import Groq
 
 from jarvis_arch import AgentRuntime, GroqProvider, OllamaProvider, ToolRegistry
+from jarvis_arch.memory import MemoryStore
 
-VERSION = "11.0.0"
+VERSION = "12.0.0"
 HOME = Path.home().resolve()
 
 BASE = HOME / ".local/share/lambdaws-jarvis"
@@ -23,6 +24,7 @@ DATA.mkdir(parents=True, exist_ok=True)
 
 HISTORY_FILE = DATA / "history-v2.json"
 MEMORY_FILE = DATA / "memory.json"
+DB_FILE = DATA / "jarvis.db"
 MAX_HISTORY = 40
 MAX_AGENT_STEPS = 8
 
@@ -73,7 +75,7 @@ load_secret()
 # ==========================================================
 
 SYSTEM = """
-Você é Jarvis v10, o assistente pessoal da workstation LambdaWS.
+Você é Jarvis v12, o assistente pessoal da workstation LambdaWS.
 
 Fale em português brasileiro por padrão.
 
@@ -108,53 +110,39 @@ Firefox e Konsole podem ser usados em qualquer workspace.
 
 
 # ==========================================================
-# HISTORY
+# HISTORY + MEMORY
 # ==========================================================
 
+def _store():
+    store = MemoryStore(DATA / "jarvis.db")
+    store.migrate_legacy(HISTORY_FILE, MEMORY_FILE, MAX_HISTORY)
+    return store
+
+
 def load_history():
-
     try:
-        data = json.loads(HISTORY_FILE.read_text(encoding="utf-8"))
-
-        if isinstance(data, list):
-            return [
-                item for item in data[-MAX_HISTORY:]
-                if isinstance(item, dict)
-                and item.get("role") in {"user", "assistant"}
-                and isinstance(item.get("content", ""), str)
-            ]
-
-    except (OSError, ValueError, TypeError):
-        pass
-
-    return []
+        return _store().load_history(MAX_HISTORY)
+    except OSError:
+        return []
 
 
 def save_history(history):
     try:
-        DATA.mkdir(parents=True, exist_ok=True)
-        payload = json.dumps(
-            history[-MAX_HISTORY:],
-            ensure_ascii=False,
-            indent=2
-        )
-        _atomic_write(HISTORY_FILE, payload, mode=0o600)
+        _store().replace_history(history, MAX_HISTORY)
     except OSError:
         pass
 
 
 def load_memory():
     try:
-        data = json.loads(MEMORY_FILE.read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else {}
-    except (OSError, ValueError, TypeError):
+        return _store().load_memory()
+    except OSError:
         return {}
 
 
 def save_memory(memory):
     try:
-        payload = json.dumps(memory, ensure_ascii=False, indent=2)
-        _atomic_write(MEMORY_FILE, payload, mode=0o600)
+        _store().replace_memory(memory)
     except OSError as error:
         raise RuntimeError(f"Não foi possível salvar a memória: {error}") from error
 
@@ -560,23 +548,12 @@ def remember(key, value, confirm):
     if not confirm(f"Salvar na memória local?\n\n{key}: {value}"):
         return {"cancelled": True}
 
-    memory = load_memory()
-    memory[key] = {"value": value, "updated_at": int(time.time())}
-    save_memory(memory)
+    _store().remember(key, value)
     return {"success": True, "key": key}
 
 
 def recall_memory(query=""):
-    memory = load_memory()
-    query = str(query).strip().lower()
-    if query:
-        filtered = {}
-        for key, item in memory.items():
-            value = item.get("value", "") if isinstance(item, dict) else item
-            if query in key.lower() or query in str(value).lower():
-                filtered[key] = item
-        memory = filtered
-    return {"memory": memory}
+    return {"memory": _store().load_memory(query)}
 
 
 def git_action(path, action, argument, confirm):

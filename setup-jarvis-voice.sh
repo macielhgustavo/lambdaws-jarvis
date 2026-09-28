@@ -16,11 +16,6 @@ uv pip install --python "$VOICE_VENV/bin/python" \
   groq faster-whisper piper-tts scipy scikit-learn \
   "openwakeword @ git+https://github.com/dscripka/openWakeWord.git@v0.5.1"
 
-"$VOICE_VENV/bin/python" - <<'PY'
-from openwakeword.utils import download_models
-
-download_models(model_names=["hey_jarvis"])
-PY
 
 ENV_FILE="$CONFIG/voice.env"
 touch "$ENV_FILE"

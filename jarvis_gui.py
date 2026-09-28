@@ -12,7 +12,7 @@ from pathlib import Path
 
 from groq import Groq
 from PySide6.QtCore import QObject, Qt, QThread, QTimer, Signal, Slot, QPropertyAnimation, QEasingCurve
-from PySide6.QtGui import QColor, QDesktopServices, QKeySequence, QShortcut, QTextDocument, QPainter, QPen, QRadialGradient
+from PySide6.QtGui import QColor, QDesktopServices, QKeySequence, QShortcut, QTextDocument, QPainter, QPen, QRadialGradient, QLinearGradient
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
@@ -42,7 +42,14 @@ from jarvis_arch.client import connect_remote
 
 STYLE = """
 QWidget { background: #090e1c; color: #e9f2ff; font-family: "Inter", "Noto Sans", "DejaVu Sans"; font-size: 13px; }
-QWidget#sidebar { background: #0b1224; border-right: 1px solid #24344d; }
+QWidget#sidebar { background: #0a1020; border-right: 1px solid #223551; }
+QWidget#mainSurface { background: transparent; }
+QFrame#heroPanel { background: #101c32; border: 1px solid #2e4d6b; border-radius: 25px; }
+QFrame#systemPanel { background: #111c2e; border: 1px solid #2a415d; border-radius: 17px; }
+QLabel#metricValue { font-size: 18px; font-weight: 700; color: #f1fbff; }
+QLabel#sidebarCaption { color: #7b95b4; font-size: 10px; letter-spacing: 1px; }
+QFrame#sidebarModule { background: #111e34; border: 1px solid #2b415d; border-radius: 15px; }
+QFrame#divider { background: #2b435f; max-height: 1px; }
 QLabel { background: transparent; }
 QLabel#brand { color: #eafaff; font-size: 22px; font-weight: 800; letter-spacing: 3px; }
 QLabel#eyebrow { color: #69dbe9; font-size: 10px; font-weight: 700; letter-spacing: 2px; }
@@ -61,7 +68,7 @@ QPushButton#primary:disabled { background: #26404b; color: #819eaa; border-color
 QPushButton#quiet { background: transparent; border-color: transparent; color: #a8bed6; }
 QPushButton#quiet:hover { background: #1b2a44; color: #f3fcff; }
 QPushButton#nav { background: #193147; color: #9ff4f3; border-color: #36647a; }
-QPushButton#card { background: #111e35; border: 1px solid #2a4563; border-radius: 16px; padding: 20px; font-size: 13px; font-weight: 600; }
+QPushButton#card { background: #14233b; border: 1px solid #335371; border-radius: 16px; padding: 20px; font-size: 13px; font-weight: 600; }
 QPushButton#card:hover { background: #1c3152; border-color: #7ce4f5; }
 QPushButton#recording { background: #552a4d; color: #ffe0ee; border-color: #ee8ac3; }
 QFrame#composer { background: #121f35; border: 1px solid #426583; border-radius: 18px; }
@@ -85,6 +92,75 @@ QToolTip { color: #effaff; background: #1b3651; border: 1px solid #559ab0; paddi
 """
 
 
+class Atmosphere(QWidget):
+    """Subtle ambient grid painted behind the chat without a web renderer."""
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        background = QLinearGradient(0, 0, self.width(), self.height())
+        background.setColorAt(0, QColor('#101b31'))
+        background.setColorAt(0.55, QColor('#0b1426'))
+        background.setColorAt(1, QColor('#10142a'))
+        painter.fillRect(self.rect(), background)
+        painter.setPen(QPen(QColor(96, 158, 209, 13), 1))
+        for x in range(0, self.width(), 44):
+            painter.drawLine(x, 0, x, self.height())
+        for y in range(0, self.height(), 44):
+            painter.drawLine(0, y, self.width(), y)
+        bloom = QRadialGradient(self.width() * .65, 55, min(480, self.width() * .6))
+        bloom.setColorAt(0, QColor(57, 162, 219, 33))
+        bloom.setColorAt(1, QColor(57, 162, 219, 0))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(bloom)
+        painter.drawRect(self.rect())
+
+
+class SignalWave(QWidget):
+    """Animation tracks the actual UI activity state, never simulated audio input."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedHeight(34)
+        self.phase = 0.0
+        self.mode = 'idle'
+        self.timer = QTimer(self)
+        self.timer.setInterval(45)
+        self.timer.timeout.connect(self.tick)
+        if os.getenv("JARVIS_REDUCE_MOTION") != "1":
+            self.timer.start()
+
+    def set_mode(self, mode):
+        self.mode = mode
+        self.update()
+
+    def tick(self):
+        if self.isVisible() and self.mode != 'idle':
+            self.phase += .17
+            self.update()
+
+    def paintEvent(self, event):
+        import math
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        count = min(46, max(8, self.width() // 9))
+        spacing = self.width() / (count + 1)
+        for i in range(count):
+            envelope = .25 + .75 * math.sin(math.pi * (i + 1) / (count + 1)) ** 2
+            if self.mode == 'idle':
+                height = 3 + 2 * envelope
+            else:
+                oscillation = abs(math.sin(self.phase + i * .38) * math.cos(self.phase * .47 - i * .21))
+                height = 4 + 26 * envelope * (.18 + .82 * oscillation)
+            color = QColor('#bd8cff') if self.mode == 'recording' else QColor('#80eaf6')
+            color.setAlpha(110 if self.mode == 'idle' else 225)
+            painter.setPen(QPen(color, 3, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+            x = int((i + 1) * spacing)
+            mid = self.height() / 2
+            painter.drawLine(x, int(mid - height / 2), x, int(mid + height / 2))
+
+
 class NeuralOrb(QWidget):
     """Lightweight painted animation; no network or GPU dependency."""
 
@@ -95,7 +171,8 @@ class NeuralOrb(QWidget):
         self.timer = QTimer(self)
         self.timer.setInterval(40)
         self.timer.timeout.connect(self.tick)
-        self.timer.start()
+        if os.getenv("JARVIS_REDUCE_MOTION") != "1":
+            self.timer.start()
 
     def tick(self):
         if self.isVisible():
@@ -346,7 +423,11 @@ class Window(QWidget):
         side.setSpacing(12)
         side.addWidget(label("◈  JARVIS", "brand"))
         side.addWidget(label("LAMBDAWS  /  NEURAL OS", "eyebrow"))
-        side.addSpacing(28)
+        side.addSpacing(23)
+        divider = QFrame()
+        divider.setObjectName("divider")
+        side.addWidget(divider)
+        side.addSpacing(14)
         self.new_button = button(
             "+  Nova conversa",
             self.new_conversation,
@@ -360,16 +441,25 @@ class Window(QWidget):
         side.addWidget(button("◇  Memória", self.show_memory))
         side.addWidget(button("⌘  Atalhos", self.show_shortcuts))
         side.addStretch()
-        side.addWidget(label("SISTEMA ONLINE", "sectionTitle"))
-        side.addWidget(label("Alterações em arquivos e Git\nsão revisadas por você."))
+        module = QFrame()
+        module.setObjectName("sidebarModule")
+        module_layout = QVBoxLayout(module)
+        module_layout.setContentsMargins(14, 15, 14, 15)
+        module_layout.setSpacing(7)
+        module_layout.addWidget(label("◉  SISTEMA ONLINE", "eyebrow"))
+        module_layout.addWidget(label("Operação sob seu comando", "sectionTitle"))
+        module_layout.addWidget(label("Ações em arquivos e Git passam pela sua revisão.", "sidebarCaption"))
+        side.addWidget(module)
         side.addSpacing(20)
         side.addWidget(label(f"LAMBDAWS   /   V{VERSION.split('.')[0]}", "eyebrow"))
         outer.addWidget(self.sidebar)
 
-        main = QVBoxLayout()
-        main.setContentsMargins(30, 24, 30, 18)
-        main.setSpacing(16)
-        outer.addLayout(main, 1)
+        self.main_surface = Atmosphere()
+        self.main_surface.setObjectName("mainSurface")
+        main = QVBoxLayout(self.main_surface)
+        main.setContentsMargins(34, 26, 34, 19)
+        main.setSpacing(15)
+        outer.addWidget(self.main_surface, 1)
         header = QHBoxLayout()
         titles = QVBoxLayout()
         titles.setSpacing(4)
@@ -430,19 +520,26 @@ class Window(QWidget):
         main.addWidget(self.pages, 1)
         self.welcome = QWidget()
         welcome = QVBoxLayout(self.welcome)
-        welcome.setContentsMargins(12, 16, 12, 16)
+        welcome.setContentsMargins(8, 12, 8, 12)
         welcome.setSpacing(16)
         welcome.addStretch()
+        hero = QFrame()
+        hero.setObjectName("heroPanel")
+        hero_layout = QHBoxLayout(hero)
+        hero_layout.setContentsMargins(26, 20, 26, 20)
+        hero_layout.setSpacing(20)
+        words = QVBoxLayout()
+        words.setSpacing(11)
+        words.addWidget(label("◈   LAMBDAWS   /   INTERFACE NEURAL", "eyebrow"))
+        words.addWidget(label("Tudo começa com\numa ideia.", "hero"))
+        words.addWidget(label("Pense, crie e controle sua workstation.\nO Jarvis está pronto para acompanhar."))
+        self.wave = SignalWave()
+        words.addWidget(self.wave)
+        hero_layout.addLayout(words, 1)
         self.orb = NeuralOrb()
-        welcome.addWidget(self.orb)
-        welcome.addWidget(label("LAMBDAWS  /  INTERFACE NEURAL", "eyebrow"))
-        welcome.addWidget(label("O futuro começa aqui.", "hero"))
-        welcome.addWidget(
-            label(
-                "Um espaço para pensar, criar e comandar.\n"
-                "Escolha uma direção ou comece sua própria conversa."
-            )
-        )
+        hero_layout.addWidget(self.orb, 0, Qt.AlignmentFlag.AlignCenter)
+        welcome.addWidget(hero)
+        welcome.addWidget(label("ESCOLHA UMA DIREÇÃO", "eyebrow"))
         cards = QGridLayout()
         cards.setSpacing(12)
         self.suggestions = []
@@ -478,6 +575,23 @@ class Window(QWidget):
             cards.addWidget(control, index // 2, index % 2)
             self.suggestions.append(control)
         welcome.addLayout(cards)
+        metrics = QHBoxLayout()
+        metrics.setSpacing(12)
+        for title, value, detail in (
+            ("INTERFACE", "NEURAL", "Assistência contextual"),
+            ("CONTROLE", "SEU", "Você aprova as ações"),
+            ("ENTRADA", "VOZ + TEXTO", "Escolha como interagir"),
+        ):
+            panel = QFrame()
+            panel.setObjectName("systemPanel")
+            panel_layout = QVBoxLayout(panel)
+            panel_layout.setContentsMargins(16, 13, 16, 13)
+            panel_layout.setSpacing(4)
+            panel_layout.addWidget(label(title, "eyebrow"))
+            panel_layout.addWidget(label(value, "metricValue"))
+            panel_layout.addWidget(label(detail, "sidebarCaption"))
+            metrics.addWidget(panel, 1)
+        welcome.addLayout(metrics)
         welcome.addStretch()
         self.welcome_scroll = QScrollArea()
         self.welcome_scroll.setWidgetResizable(True)
@@ -555,7 +669,7 @@ class Window(QWidget):
         self.messages.append(card)
         self.message_layout.insertWidget(self.message_layout.count() - 1, card)
         self.pages.setCurrentWidget(self.scroll)
-        if not QApplication.instance().property("reduceMotion"):
+        if os.getenv("JARVIS_REDUCE_MOTION") != "1" and not QApplication.instance().property("reduceMotion"):
             effect = QGraphicsOpacityEffect(card)
             card.setGraphicsEffect(effect)
             animation = QPropertyAnimation(effect, b"opacity", card)
@@ -690,6 +804,7 @@ class Window(QWidget):
         self.thread.finished.connect(self.job_finished)
         self.thread.finished.connect(self.thread.deleteLater)
         self.progress.show()
+        self.wave.set_mode("thinking")
         self.badge.setText("TRANSCREVENDO" if job == "voice" else "PENSANDO")
         self.update_elapsed()
         self.pulse.start()
@@ -710,6 +825,7 @@ class Window(QWidget):
     def on_result(self, text, backend):
         self.pulse.stop()
         self.progress.hide()
+        self.wave.set_mode("idle")
         elapsed = max(1, int(time.monotonic() - self.started_at))
         if self.job == "voice":
             if backend == "erro":
@@ -855,12 +971,14 @@ class Window(QWidget):
         self.mic.setObjectName("recording")
         self.mic.style().unpolish(self.mic)
         self.mic.style().polish(self.mic)
+        self.wave.set_mode("recording")
         self.badge.setText("GRAVANDO")
         self.status.setText("Ouvindo… Clique em Parar gravação quando terminar.")
         self.record_limit.start(60_000)
         self.refresh_controls()
 
     def stop_recording(self):
+        self.wave.set_mode("idle")
         if self.recorder is None:
             return
         self.record_limit.stop()

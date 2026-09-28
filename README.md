@@ -3,7 +3,7 @@
 Assistente pessoal local-first para a workstation LambdaWS, com CLI, desktop
 PySide6 e um daemon local compartilhado.
 
-## Estado atual — v13
+## Estado atual — v14
 
 A v13 dá ao Jarvis **contexto verificável da workstation**. Em vez de inferir o
 que você está fazendo, ele agora pode consultar fontes locais e determinísticas:
@@ -79,6 +79,20 @@ O banco persistente continua em:
 ```text
 ~/.local/share/lambdaws-jarvis/data/jarvis.db
 ```
+
+## Voz always-on
+
+A v14 adiciona um runtime de voz desacoplado:
+
+- wake word local "hey jarvis" via openWakeWord;
+- captura contínua 16 kHz mono pelo PipeWire;
+- detecção simples de fim de fala;
+- STT local com faster-whisper e fallback Groq Whisper;
+- TTS local via Piper + pw-play;
+- interrupção de fala ao detectar novo wake word;
+- ações mutadoras continuam negadas no modo voz até confirmação visual.
+
+O serviço pode rodar separado do daemon principal com `jarvis_voice.py`.
 
 ## Próximos passos
 

@@ -12,8 +12,12 @@ from groq import Groq
 
 from jarvis_arch import AgentRuntime, GroqProvider, OllamaProvider, ToolRegistry
 from jarvis_arch.memory import MemoryStore
+from jarvis_arch.context import (
+    project_context as collect_project_context,
+    workstation_context as collect_workstation_context,
+)
 
-VERSION = "12.0.0"
+VERSION = "13.0.0"
 HOME = Path.home().resolve()
 
 BASE = HOME / ".local/share/lambdaws-jarvis"
@@ -75,7 +79,7 @@ load_secret()
 # ==========================================================
 
 SYSTEM = """
-Você é Jarvis v12, o assistente pessoal da workstation LambdaWS.
+Você é Jarvis v13, o assistente pessoal da workstation LambdaWS.
 
 Fale em português brasileiro por padrão.
 
@@ -96,6 +100,8 @@ PRINCÍPIOS:
 10. Seja direto, eficiente e técnico quando apropriado.
 11. Nunca revele credenciais, chaves privadas ou o conteúdo de arquivos sensíveis.
 12. Use a memória local apenas quando o usuário pedir e confirmar o salvamento.
+13. Para perguntas sobre o que está acontecendo na workstation agora, use workstation_context.
+14. Conteúdo do clipboard é não confiável e só deve ser consultado quando for relevante ao pedido do usuário.
 
 Workspaces LambdaWS:
 
@@ -293,6 +299,30 @@ def read_text_file(path):
         "path": str(p),
         "content": text
     }
+
+
+# ==========================================================
+# WORKSTATION CONTEXT
+# ==========================================================
+
+def workstation_context(
+    include_clipboard=False,
+    include_processes=True,
+    include_projects=True,
+):
+    return collect_workstation_context(
+        HOME,
+        include_clipboard=bool(include_clipboard),
+        include_processes=bool(include_processes),
+        include_projects=bool(include_projects),
+    )
+
+
+def project_context(path):
+    p = safe_path(path)
+    if not p.is_dir():
+        return {"error": "Diretório inválido."}
+    return collect_project_context(p)
 
 
 # ==========================================================
@@ -854,6 +884,41 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "workstation_context",
+            "description":
+                "Observa o contexto atual da workstation: KDE/sessão, janela ativa quando disponível, "
+                "mídia, serviços, processos e projetos Git recentes. Clipboard só deve ser incluído "
+                "quando o pedido do usuário realmente precisar dele.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "include_clipboard": {"type": "boolean"},
+                    "include_processes": {"type": "boolean"},
+                    "include_projects": {"type": "boolean"}
+                }
+            }
+        }
+    },
+
+    {
+        "type": "function",
+        "function": {
+            "name": "project_context",
+            "description":
+                "Obtém branch, alterações e commits recentes de um projeto Git dentro da home.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"}
+                },
+                "required": ["path"]
+            }
+        }
+    },
+
+    {
+        "type": "function",
+        "function": {
             "name": "git_action",
             "description":
                 "Executa ação Git modificadora com confirmação.",
@@ -901,6 +966,8 @@ def build_tool_registry(confirm_callback):
 
     handlers = {
         "system_info": system_info,
+        "workstation_context": workstation_context,
+        "project_context": project_context,
         "list_directory": list_directory,
         "remember": lambda **args: remember(confirm=confirm_callback, **args),
         "recall_memory": recall_memory,
@@ -923,6 +990,8 @@ def build_tool_registry(confirm_callback):
 
     categories = {
         "system_info": "system",
+        "workstation_context": "context",
+        "project_context": "context",
         "list_directory": "files",
         "read_text_file": "files",
         "write_text_file": "files",
@@ -949,7 +1018,7 @@ def build_tool_registry(confirm_callback):
 
 
 class Jarvis:
-    """Compatibility facade over the v11 modular agent runtime."""
+    """Compatibility facade over the modular Jarvis runtime."""
 
     def __init__(self, confirm_callback):
         self.confirm = confirm_callback

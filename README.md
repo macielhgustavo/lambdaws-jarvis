@@ -1,45 +1,40 @@
 # LambdaWS Jarvis
 
-Assistente pessoal local-first para a workstation LambdaWS, com interface de
-terminal e desktop em PySide6.
+Assistente pessoal local-first para a workstation LambdaWS, com CLI, desktop
+PySide6 e um daemon local compartilhado.
 
-## Estado atual — v11
+## Estado atual — v12
 
-A v11 inicia a transição do Jarvis de um assistente monolítico para uma
-plataforma modular:
+A v12 consolida duas peças importantes:
 
-- `AgentRuntime`: loop agentic independente de GUI/CLI;
-- `ToolRegistry`: registro explícito de capacidades, sem dispatcher monolítico;
-- `GroqProvider` e `OllamaProvider`: providers desacoplados do runtime;
-- `EventBus`: contrato inicial para voz, daemon, scheduler e automações futuras;
-- camada de compatibilidade em `core.Jarvis`, preservando os clientes atuais.
+- **Ollama com tool calling real**: o fallback local usa o mesmo `AgentRuntime`
+  e as mesmas ferramentas do provider cloud;
+- **memória SQLite**: histórico e memória durável passam a usar
+  `data/jarvis.db`, com migração automática dos JSONs antigos.
 
-O comportamento da v10 foi mantido: Groq continua sendo o provider agentic
-principal e Ollama/Qwen3 4B continua sendo o fallback local de texto. A nova
-arquitetura permite evoluir o fallback local para tool calling sem alterar GUI,
-CLI ou runtime.
+A v11 continua presente por baixo: `jarvisd`, IPC local, `ToolRegistry`,
+providers desacoplados e `EventBus`.
 
 ## Requisitos
 
 - Python 3.14+
 - uv
-- Chave da Groq configurada fora do repositorio
-- Ollama opcional para fallback local
+- Groq opcional para provider cloud
+- Ollama recomendado para modo local
+- modelo local com suporte a tools, como `qwen3:4b`
 
 ## Instalar ou atualizar
 
 ```bash
-./setup-jarvis-v11.sh
+./setup-jarvis-v12.sh
 ```
-
-O instalador sincroniza dependencias, valida o codigo, cria os atalhos
-`jarvis` e `jarvis-ui`, e registra o atalho de desktop.
 
 ## Uso
 
 ```bash
 jarvis
 jarvis-ui
+systemctl --user status lambdaws-jarvis.service
 ```
 
 ## Arquitetura
@@ -47,32 +42,38 @@ jarvis-ui
 ```text
 CLI / GUI
     |
-core.Jarvis          <- facade compatível
+RemoteJarvis
+    |
+  jarvisd
     |
 AgentRuntime
-    |------ GroqProvider
-    |------ OllamaProvider
-    |------ ToolRegistry
-    |------ History
-    |
-EventBus             <- base para serviços futuros
+  |--- GroqProvider
+  |--- OllamaProvider  <-- tools locais
+  |--- ToolRegistry
+  |--- SQLite MemoryStore
+  |
+EventBus
 ```
 
-Os novos componentes vivem em `jarvis_arch/`.
+## Memória local
+
+O banco fica em:
+
+```text
+~/.local/share/lambdaws-jarvis/data/jarvis.db
+```
+
+Na primeira abertura, se o banco estiver vazio, o Jarvis importa automaticamente:
+
+- `history-v2.json`
+- `memory.json`
+
+Os arquivos antigos não são apagados durante a migração.
 
 ## Próximos passos
 
-1. provider local com tool calling;
-2. memória/contexto em SQLite;
-3. pipeline de voz realtime com wake word, VAD, STT e TTS;
-4. integrações KDE/D-Bus e automações proativas;
-5. clientes extras sobre o daemon (overlay/web/mobile).
-
-## Dados locais
-
-O repositorio nao versiona dados privados ou gerados automaticamente:
-
-- `data/`, com historico local de conversa
-- `backups/`, com backups de instalacao
-- `.venv/`, caches e bytecode
-- arquivos de credencial como `secrets.env`
+1. contexto ativo da workstation e projetos;
+2. pipeline de voz realtime com wake word, VAD, STT e TTS;
+3. integrações KDE/D-Bus e automações proativas;
+4. memória episódica/semântica mais rica;
+5. overlay e clientes remotos.

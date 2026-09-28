@@ -11,13 +11,14 @@ from datetime import datetime
 from pathlib import Path
 
 from groq import Groq
-from PySide6.QtCore import QObject, Qt, QThread, QTimer, Signal, Slot
-from PySide6.QtGui import QColor, QDesktopServices, QKeySequence, QShortcut, QTextDocument
+from PySide6.QtCore import QObject, Qt, QThread, QTimer, Signal, Slot, QPropertyAnimation, QEasingCurve
+from PySide6.QtGui import QColor, QDesktopServices, QKeySequence, QShortcut, QTextDocument, QPainter, QPen, QRadialGradient
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
     QFileDialog,
     QFrame,
+    QGraphicsOpacityEffect,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -40,52 +41,99 @@ from core import VERSION, Jarvis, recall_memory, _atomic_write
 from jarvis_arch.client import connect_remote
 
 STYLE = """
-QWidget { background: #111617; color: #edf2ee; font-family: "DejaVu Sans";
-    font-size: 13px; }
-QWidget#sidebar { background: #0d1112; border-right: 1px solid #28312e; }
+QWidget { background: #090e1c; color: #e9f2ff; font-family: "Inter", "Noto Sans", "DejaVu Sans"; font-size: 13px; }
+QWidget#sidebar { background: #0b1224; border-right: 1px solid #24344d; }
 QLabel { background: transparent; }
-QLabel#brand { font-size: 22px; font-weight: 700; letter-spacing: 3px; }
-QLabel#eyebrow { color: #a6c9b3; font-size: 11px; letter-spacing: 2px; }
-QLabel#muted { color: #a1ada6; font-size: 12px; }
-QLabel#hero { font-size: 34px; font-weight: 600; }
-QLabel#sectionTitle { font-size: 17px; font-weight: 600; }
-QLabel#orb { color: #c6f2d4; font-size: 42px; background: #1d3025;
-    border: 1px solid #45634f; border-radius: 28px; }
-QLabel#badge { background: #1d3025; color: #bcecc9; border-radius: 9px;
-    padding: 5px 10px; font-size: 11px; }
-QPushButton { background: #1b2320; border: 1px solid #34403a; border-radius: 9px;
-    padding: 10px 14px; text-align: left; }
-QPushButton:hover { background: #28372e; border-color: #698d76; }
-QPushButton:pressed { background: #354b3b; }
-QPushButton:focus { border: 1px solid #b6efc8; }
-QPushButton:disabled { color: #748078; background: #18201b; border-color: #2a342e; }
-QPushButton#primary { background: #c0edce; color: #10251a; border-color: #c0edce;
-    font-weight: 700; text-align: center; }
-QPushButton#primary:hover { background: #d8f8e1; }
-QPushButton#primary:disabled { background: #314c3a; color: #94ad9c; border-color: #314c3a; }
-QPushButton#quiet { background: transparent; border-color: transparent; color: #adbab1; }
-QPushButton#quiet:hover { background: #202c25; color: #edf2ee; }
-QPushButton#nav { background: #223128; color: #d0f0da; border-color: #344d3d; }
-QPushButton#card { background: #18201c; border-color: #303e35; padding: 18px;
-    font-size: 13px; }
-QPushButton#card:hover { background: #223228; border-color: #70967c; }
-QPushButton#recording { background: #492a2b; color: #ffd8d5; border-color: #b77070; }
-QFrame#composer { background: #1b2420; border: 1px solid #496151; border-radius: 16px; }
-QFrame#assistant { background: #18211c; border: 1px solid #2d3d32; border-radius: 13px; }
-QFrame#user { background: #24352b; border: 1px solid #3c5143; border-radius: 13px; }
-QPlainTextEdit { background: transparent; border: none; padding: 4px;
-    font-size: 14px; selection-background-color: #466d51; }
-QTextBrowser { background: transparent; border: none; font-size: 14px;
-    selection-background-color: #466d51; }
-QScrollArea { border: none; background: transparent; }
-QScrollBar:vertical { background: transparent; width: 8px; margin: 2px; }
-QScrollBar::handle:vertical { background: #3d5044; border-radius: 3px; min-height: 28px; }
+QLabel#brand { color: #eafaff; font-size: 22px; font-weight: 800; letter-spacing: 3px; }
+QLabel#eyebrow { color: #69dbe9; font-size: 10px; font-weight: 700; letter-spacing: 2px; }
+QLabel#muted { color: #9caec7; font-size: 12px; }
+QLabel#hero { color: #f3f8ff; font-size: 36px; font-weight: 700; }
+QLabel#sectionTitle { color: #e8f4ff; font-size: 16px; font-weight: 700; }
+QLabel#badge { background: #123a43; color: #8df7df; border: 1px solid #286b71; border-radius: 10px; padding: 7px 12px; font-size: 10px; font-weight: 700; letter-spacing: 1px; }
+QPushButton { background: #151f35; color: #dcecff; border: 1px solid #2d405c; border-radius: 11px; padding: 10px 14px; text-align: left; }
+QPushButton:hover { background: #203252; border-color: #67d9f0; color: #ffffff; }
+QPushButton:pressed { background: #2a4267; }
+QPushButton:focus { border: 1px solid #9aeefa; }
+QPushButton:disabled { color: #70819b; background: #111a2b; border-color: #243047; }
+QPushButton#primary { background: #8cecf3; color: #092030; border-color: #a8f4f7; font-weight: 800; text-align: center; }
+QPushButton#primary:hover { background: #c0f8f8; border-color: #ffffff; }
+QPushButton#primary:disabled { background: #26404b; color: #819eaa; border-color: #26404b; }
+QPushButton#quiet { background: transparent; border-color: transparent; color: #a8bed6; }
+QPushButton#quiet:hover { background: #1b2a44; color: #f3fcff; }
+QPushButton#nav { background: #193147; color: #9ff4f3; border-color: #36647a; }
+QPushButton#card { background: #111e35; border: 1px solid #2a4563; border-radius: 16px; padding: 20px; font-size: 13px; font-weight: 600; }
+QPushButton#card:hover { background: #1c3152; border-color: #7ce4f5; }
+QPushButton#recording { background: #552a4d; color: #ffe0ee; border-color: #ee8ac3; }
+QFrame#composer { background: #121f35; border: 1px solid #426583; border-radius: 18px; }
+QFrame#assistant { background: #121d32; border: 1px solid #2c4966; border-radius: 16px; }
+QFrame#user { background: #1d2e4b; border: 1px solid #3b617f; border-radius: 16px; }
+QPlainTextEdit { background: transparent; border: none; padding: 5px; color: #eff8ff; font-size: 14px; selection-background-color: #315d80; }
+QTextBrowser { background: transparent; border: none; color: #e7f1fc; font-size: 14px; selection-background-color: #315d80; }
+QLineEdit { background: #15243a; border: 1px solid #34516e; border-radius: 10px; padding: 9px; color: #eefaff; }
+QLineEdit:focus { border-color: #89eafa; }
+QScrollArea, QStackedWidget { border: none; background: transparent; }
+QScrollBar:vertical { background: transparent; width: 9px; margin: 2px; }
+QScrollBar::handle:vertical { background: #395673; border-radius: 3px; min-height: 28px; }
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
 QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
-QProgressBar { border: none; background: #26392d; max-height: 3px; }
-QProgressBar::chunk { background: #b9e9c8; }
-QToolTip { color: #edf2ee; background: #253a2b; border: 1px solid #5d7e66; padding: 6px; }
+QProgressBar { border: none; background: #1e344e; max-height: 3px; }
+QProgressBar::chunk { background: #7deaf3; }
+QMenu { background: #14233a; border: 1px solid #45617e; padding: 6px; }
+QMenu::item { padding: 8px 16px; }
+QMenu::item:selected { background: #285071; }
+QToolTip { color: #effaff; background: #1b3651; border: 1px solid #559ab0; padding: 6px; }
 """
+
+
+class NeuralOrb(QWidget):
+    """Lightweight painted animation; no network or GPU dependency."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(138, 138)
+        self._phase = 0.0
+        self.timer = QTimer(self)
+        self.timer.setInterval(40)
+        self.timer.timeout.connect(self.tick)
+        self.timer.start()
+
+    def tick(self):
+        if self.isVisible():
+            self._phase = (self._phase + 0.025) % 6.283
+            self.update()
+
+    def paintEvent(self, event):
+        import math
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        center = self.rect().center()
+        halo = QRadialGradient(center, 66)
+        halo.setColorAt(0, QColor(58, 207, 238, 85))
+        halo.setColorAt(0.48, QColor(91, 112, 237, 37))
+        halo.setColorAt(1, QColor(9, 14, 28, 0))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(halo)
+        painter.drawEllipse(self.rect().adjusted(2, 2, -2, -2))
+        for radius, width, alpha in ((51, 1, 90), (39, 2, 135), (26, 2, 205)):
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.setPen(QPen(QColor(123, 219, 249, alpha), width))
+            painter.drawEllipse(center, radius, radius)
+        for offset in (0, 2.094, 4.188):
+            angle = self._phase + offset
+            radius = 39
+            x = center.x() + math.cos(angle) * radius
+            y = center.y() + math.sin(angle) * radius
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor('#a0faff'))
+            painter.drawEllipse(int(x - 3), int(y - 3), 6, 6)
+        core = QRadialGradient(center, 25)
+        core.setColorAt(0, QColor('#efffff'))
+        core.setColorAt(0.38, QColor('#87eafa'))
+        core.setColorAt(1, QColor('#4261d5'))
+        painter.setBrush(core)
+        painter.drawEllipse(center, 20, 20)
+
 
 
 def label(text, name="muted"):
@@ -130,9 +178,9 @@ class MessageBody(QTextBrowser):
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.document().setDefaultStyleSheet(
-            "pre { background-color: #0d1410; color: #d1edda; white-space: pre-wrap; }"
-            "code { font-family: monospace; color: #c0edce; }"
-            "a { color: #b4e8c6; } p { margin-top: 6px; margin-bottom: 10px; }"
+            "pre { background-color: #0b1728; color: #d2f4ff; white-space: pre-wrap; }"
+            "code { font-family: monospace; color: #9deffa; }"
+            "a { color: #84e9fa; } p { margin-top: 6px; margin-bottom: 10px; }"
         )
         if markdown:
             self.document().setMarkdown(
@@ -297,7 +345,7 @@ class Window(QWidget):
         side.setContentsMargins(22, 30, 22, 24)
         side.setSpacing(12)
         side.addWidget(label("◈  JARVIS", "brand"))
-        side.addWidget(label("SEU ESPAÇO DE IDEIAS", "eyebrow"))
+        side.addWidget(label("LAMBDAWS  /  NEURAL OS", "eyebrow"))
         side.addSpacing(28)
         self.new_button = button(
             "+  Nova conversa",
@@ -307,12 +355,12 @@ class Window(QWidget):
         )
         side.addWidget(self.new_button)
         side.addSpacing(22)
-        side.addWidget(label("ESPAÇO PESSOAL", "eyebrow"))
+        side.addWidget(label("CENTRAL DE COMANDO", "eyebrow"))
         side.addWidget(button("◉  Conversa", lambda: self.input.setFocus(), "nav"))
         side.addWidget(button("◇  Memória", self.show_memory))
         side.addWidget(button("⌘  Atalhos", self.show_shortcuts))
         side.addStretch()
-        side.addWidget(label("Você está no controle", "sectionTitle"))
+        side.addWidget(label("SISTEMA ONLINE", "sectionTitle"))
         side.addWidget(label("Alterações em arquivos e Git\nsão revisadas por você."))
         side.addSpacing(20)
         side.addWidget(label(f"LAMBDAWS   /   V{VERSION.split('.')[0]}", "eyebrow"))
@@ -325,10 +373,10 @@ class Window(QWidget):
         header = QHBoxLayout()
         titles = QVBoxLayout()
         titles.setSpacing(4)
-        titles.addWidget(label("Assistente pessoal", "sectionTitle"))
-        titles.addWidget(label("Ideias, projetos e sua workstation em uma conversa."))
+        titles.addWidget(label("Central de inteligência", "sectionTitle"))
+        titles.addWidget(label("Sua workstation, projetos e ideias em sintonia."))
         header.addLayout(titles, 1)
-        self.badge = label("PRONTO", "badge")
+        self.badge = label("●  SISTEMA PRONTO", "badge")
         header.addWidget(self.badge)
         self.compact_new = button(
             "+ Nova", self.new_conversation, tip="Nova conversa · Ctrl+N"
@@ -385,16 +433,14 @@ class Window(QWidget):
         welcome.setContentsMargins(12, 16, 12, 16)
         welcome.setSpacing(16)
         welcome.addStretch()
-        orb = label("✳", "orb")
-        orb.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        orb.setFixedSize(70, 70)
-        welcome.addWidget(orb)
-        welcome.addWidget(label("UM BOM COMEÇO", "eyebrow"))
-        welcome.addWidget(label("O que vamos fazer hoje?", "hero"))
+        self.orb = NeuralOrb()
+        welcome.addWidget(self.orb)
+        welcome.addWidget(label("LAMBDAWS  /  INTERFACE NEURAL", "eyebrow"))
+        welcome.addWidget(label("O futuro começa aqui.", "hero"))
         welcome.addWidget(
             label(
-                "Transforme uma ideia em próximo passo.\n"
-                "Pergunte, planeje ou peça ajuda com seus projetos."
+                "Um espaço para pensar, criar e comandar.\n"
+                "Escolha uma direção ou comece sua própria conversa."
             )
         )
         cards = QGridLayout()
@@ -470,7 +516,7 @@ class Window(QWidget):
         compose.setContentsMargins(14, 12, 14, 12)
         self.input = Composer()
         self.input.setAccessibleName("Mensagem para o Jarvis")
-        self.input.setPlaceholderText("Escreva uma ideia, pergunta ou pedido…")
+        self.input.setPlaceholderText("O que vamos construir hoje?")
         self.input.setFixedHeight(74)
         self.input.submitted.connect(self.send)
         self.input.textChanged.connect(self.refresh_controls)
@@ -509,6 +555,16 @@ class Window(QWidget):
         self.messages.append(card)
         self.message_layout.insertWidget(self.message_layout.count() - 1, card)
         self.pages.setCurrentWidget(self.scroll)
+        if not QApplication.instance().property("reduceMotion"):
+            effect = QGraphicsOpacityEffect(card)
+            card.setGraphicsEffect(effect)
+            animation = QPropertyAnimation(effect, b"opacity", card)
+            animation.setDuration(280)
+            animation.setStartValue(0.0)
+            animation.setEndValue(1.0)
+            animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+            card._entrance_animation = animation
+            animation.start()
         self.export_action.setEnabled(True)
         if not self.search_bar.isHidden():
             self.update_search()

@@ -1,12 +1,10 @@
-"""Model providers for Jarvis.
-
-Provider details stay out of the agent runtime so models can be swapped without
-rewriting tool dispatch, memory, UI, or client code.
-"""
+"""Model providers for Jarvis."""
 
 from __future__ import annotations
 
-import subprocess
+import json
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from typing import Any
 
@@ -62,7 +60,7 @@ class GroqProvider:
                 tool_choice="auto",
                 reasoning_effort=reasoning_effort,
             )
-        except Exception as error:  # provider boundary
+        except Exception as error:
             raise ProviderUnavailable(str(error)) from error
 
         message = response.choices[0].message
@@ -78,25 +76,77 @@ class GroqProvider:
 
 
 class OllamaProvider:
-    """Local model fallback.
+    """Tool-capable local provider backed by Ollama's chat API."""
 
-    v11 keeps the existing text fallback behavior behind a provider boundary.
-    Tool-capable local inference can now be added here without touching the
-    agent runtime or desktop clients.
-    """
-
-    def __init__(self, model: str) -> None:
+    def __init__(
+        self,
+        model: str,
+        *,
+        base_url: str = "http://127.0.0.1:11434",
+        timeout: float = 180.0,
+    ) -> None:
         self.model = model
+        self.base_url = base_url.rstrip("/")
+        self.timeout = timeout
         self.name = f"Ollama · {model}"
 
-    def generate(self, prompt: str) -> str:
+    @property
+    def available(self) -> bool:
         try:
-            output = subprocess.check_output(
-                ["ollama", "run", self.model, prompt],
-                text=True,
-                stderr=subprocess.STDOUT,
-                timeout=180,
+            request = urllib.request.Request(
+                self.base_url + "/api/tags",
+                method="GET",
             )
-        except (OSError, subprocess.SubprocessError) as error:
+            with urllib.request.urlopen(request, timeout=1.5) as response:
+                return response.status == 200
+        except (OSError, urllib.error.URLError):
+            return False
+
+    def complete(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        *,
+        reasoning_effort: str = "low",
+    ) -> AssistantTurn:
+        del reasoning_effort
+        payload: dict[str, Any] = {
+            "model": self.model,
+            "messages": messages,
+            "stream": False,
+        }
+        if tools:
+            payload["tools"] = tools
+
+        request = urllib.request.Request(
+            self.base_url + "/api/chat",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                data = json.loads(response.read().decode("utf-8"))
+        except (OSError, urllib.error.URLError, ValueError) as error:
             raise ProviderUnavailable(str(error)) from error
-        return output.strip()
+
+        message = data.get("message") or {}
+        calls = []
+        for index, call in enumerate(message.get("tool_calls") or []):
+            function = call.get("function") or {}
+            arguments = function.get("arguments", {})
+            if not isinstance(arguments, str):
+                arguments = json.dumps(arguments, ensure_ascii=False)
+            calls.append(
+                ToolCall(
+                    id=str(call.get("id") or f"ollama-{index}"),
+                    name=str(function.get("name") or ""),
+                    arguments=arguments,
+                )
+            )
+
+        return AssistantTurn(
+            content=str(message.get("content") or ""),
+            tool_calls=[call for call in calls if call.name],
+        )

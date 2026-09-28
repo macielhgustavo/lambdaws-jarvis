@@ -32,7 +32,7 @@ FRAME_BYTES = FRAME_SAMPLES * SAMPLE_WIDTH
 
 @dataclass(slots=True)
 class VoiceConfig:
-    wake_model: str | None = None
+    wake_model: str | None = "hey jarvis"
     wake_threshold: float = 0.55
     silence_seconds: float = 1.15
     max_command_seconds: float = 18.0
@@ -51,7 +51,7 @@ class VoiceConfig:
                 return default
 
         return cls(
-            wake_model=os.environ.get("JARVIS_WAKEWORD_MODEL") or None,
+            wake_model=os.environ.get("JARVIS_WAKEWORD_MODEL", "hey jarvis") or "hey jarvis",
             wake_threshold=number("JARVIS_WAKE_THRESHOLD", 0.55),
             silence_seconds=number("JARVIS_VOICE_SILENCE", 1.15),
             max_command_seconds=number("JARVIS_VOICE_MAX_COMMAND", 18.0),
@@ -143,15 +143,14 @@ class OpenWakeWordDetector:
 
     @property
     def available(self) -> bool:
-        return bool(self.model_path and Path(self.model_path).is_file())
+        try:
+            return importlib.util.find_spec("openwakeword.model") is not None
+        except (ImportError, AttributeError):
+            return False
 
     def _load(self):
         if self._model is not None:
             return self._model
-        if not self.available:
-            raise VoiceBackendUnavailable(
-                "Modelo wake word não configurado. Defina JARVIS_WAKEWORD_MODEL."
-            )
         try:
             module = importlib.import_module("openwakeword.model")
         except ImportError as error:
@@ -159,7 +158,14 @@ class OpenWakeWordDetector:
                 "openWakeWord não instalado no ambiente de voz."
             ) from error
 
-        self._model = module.Model(wakeword_models=[self.model_path])
+        configured = str(self.model_path or "hey jarvis").strip()
+        path = Path(configured).expanduser()
+        if path.is_file():
+            self._model = module.Model(wakeword_models=[str(path)])
+        else:
+            # Loading the packaged pretrained set keeps "hey jarvis" usable
+            # without shipping model binaries inside this repository.
+            self._model = module.Model()
         return self._model
 
     def detected(self, frame: bytes) -> bool:
@@ -167,7 +173,16 @@ class OpenWakeWordDetector:
         predictions = model.predict(frame)
         if not predictions:
             return False
-        return max(float(value) for value in predictions.values()) >= self.threshold
+
+        target = str(self.model_path or "hey jarvis").lower().replace("_", " ")
+        matching = [
+            float(value)
+            for name, value in predictions.items()
+            if target in str(name).lower().replace("_", " ")
+            or ("jarvis" in target and "jarvis" in str(name).lower())
+        ]
+        scores = matching or [float(value) for value in predictions.values()]
+        return max(scores) >= self.threshold
 
 
 class FasterWhisperSTT:
@@ -399,7 +414,7 @@ class VoiceRuntime:
     def run_forever(self) -> None:
         if not self.detector.available:
             raise VoiceBackendUnavailable(
-                "Wake word indisponível: configure JARVIS_WAKEWORD_MODEL."
+                "Wake word indisponível: instale openWakeWord no ambiente de voz."
             )
 
         self.running = True

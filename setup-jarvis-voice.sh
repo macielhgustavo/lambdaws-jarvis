@@ -12,11 +12,14 @@ command -v pw-record >/dev/null 2>&1 || { echo "pw-record não encontrado (pipew
 mkdir -p "$CONFIG" "$SYSTEMD"
 uv python install 3.12
 uv venv "$VOICE_VENV" --python 3.12
-uv pip install --python "$VOICE_VENV/bin/python"   groq openwakeword faster-whisper piper-tts
+uv pip install --python "$VOICE_VENV/bin/python" \
+  groq faster-whisper piper-tts \
+  "openwakeword @ git+https://github.com/dscripka/openWakeWord.git@v0.5.1"
 
 "$VOICE_VENV/bin/python" - <<'PY'
-import openwakeword.utils
-openwakeword.utils.download_models()
+from openwakeword.utils import download_models
+
+download_models(model_names=["hey_jarvis"])
 PY
 
 ENV_FILE="$CONFIG/voice.env"

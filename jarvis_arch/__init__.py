@@ -6,6 +6,7 @@ from .events import EventBus
 from .memory import MemoryStore
 from .providers import GroqProvider, OllamaProvider, ProviderUnavailable
 from .runtime import AgentRuntime
+from .voice import VoiceConfig, VoiceRuntime
 from .tools import ToolRegistry, ToolSpec
 
 __all__ = [
@@ -20,6 +21,8 @@ __all__ = [
     "OllamaProvider",
     "ProviderUnavailable",
     "ToolRegistry",
+    "VoiceConfig",
+    "VoiceRuntime",
     "connect_remote",
     "ToolSpec",
 ]

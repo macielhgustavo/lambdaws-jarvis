@@ -165,6 +165,8 @@ class OpenWakeWordDetector:
             self._model = module.Model(
                 wakeword_models=[str(path)],
                 inference_framework="onnx",
+                melspec_model_path=str(path.with_name("melspectrogram.onnx")),
+                embedding_model_path=str(path.with_name("embedding_model.onnx")),
             )
         else:
             self._model = module.Model(
@@ -175,7 +177,12 @@ class OpenWakeWordDetector:
 
     def detected(self, frame: bytes) -> bool:
         model = self._load()
-        predictions = model.predict(frame)
+        try:
+            numpy = importlib.import_module("numpy")
+        except ImportError as error:
+            raise VoiceBackendUnavailable("numpy não instalado no ambiente de voz.") from error
+        samples = numpy.frombuffer(frame, dtype=numpy.int16)
+        predictions = model.predict(samples)
         if not predictions:
             return False
 

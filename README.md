@@ -3,30 +3,35 @@
 Assistente pessoal local-first para a workstation LambdaWS, com CLI, desktop
 PySide6 e um daemon local compartilhado.
 
-## Estado atual — v12
+## Estado atual — v13
 
-A v12 consolida duas peças importantes:
+A v13 dá ao Jarvis **contexto verificável da workstation**. Em vez de inferir o
+que você está fazendo, ele agora pode consultar fontes locais e determinísticas:
 
-- **Ollama com tool calling real**: o fallback local usa o mesmo `AgentRuntime`
-  e as mesmas ferramentas do provider cloud;
-- **memória SQLite**: histórico e memória durável passam a usar
-  `data/jarvis.db`, com migração automática dos JSONs antigos.
+- sessão KDE/Wayland e informações do KWin;
+- janela ativa quando `kdotool` ou `xdotool` estiver disponível;
+- mídia via `playerctl`;
+- serviços `systemd --user`;
+- processos relevantes (Ollama, VS Code, Firefox, Konsole e Jarvis);
+- projetos Git recentes em `~/Projects`, `~/Code` e variantes minúsculas;
+- branch, dirty state e commits recentes de um projeto específico;
+- clipboard opcional e limitado, marcado explicitamente como conteúdo não confiável.
 
-A v11 continua presente por baixo: `jarvisd`, IPC local, `ToolRegistry`,
-providers desacoplados e `EventBus`.
+O clipboard **não é lido por padrão**.
 
 ## Requisitos
 
 - Python 3.14+
 - uv
-- Groq opcional para provider cloud
+- Groq opcional
 - Ollama recomendado para modo local
-- modelo local com suporte a tools, como `qwen3:4b`
+- KDE Plasma funciona mesmo sem ferramentas auxiliares, com contexto parcial
+- opcionais úteis: `kdotool`, `playerctl`, `wl-clipboard`
 
 ## Instalar ou atualizar
 
 ```bash
-./setup-jarvis-v12.sh
+./setup-jarvis-v13.sh
 ```
 
 ## Uso
@@ -48,32 +53,37 @@ RemoteJarvis
     |
 AgentRuntime
   |--- GroqProvider
-  |--- OllamaProvider  <-- tools locais
+  |--- OllamaProvider
   |--- ToolRegistry
+  |      |--- workstation_context
+  |      |--- project_context
+  |      |--- system/files/git/etc
   |--- SQLite MemoryStore
   |
 EventBus
 ```
 
-## Memória local
+## Contexto da workstation
 
-O banco fica em:
+`workstation_context` é uma ferramenta de observação. Ela não executa ações
+mutadoras. As fontes que não existirem na máquina são omitidas ou marcadas como
+indisponíveis.
+
+Para um repositório específico, `project_context(path)` retorna branch,
+alterações locais e commits recentes.
+
+## Memória
+
+O banco persistente continua em:
 
 ```text
 ~/.local/share/lambdaws-jarvis/data/jarvis.db
 ```
 
-Na primeira abertura, se o banco estiver vazio, o Jarvis importa automaticamente:
-
-- `history-v2.json`
-- `memory.json`
-
-Os arquivos antigos não são apagados durante a migração.
-
 ## Próximos passos
 
-1. contexto ativo da workstation e projetos;
+1. instalar uma integração KWin própria para janela/workspace com fidelidade total;
 2. pipeline de voz realtime com wake word, VAD, STT e TTS;
-3. integrações KDE/D-Bus e automações proativas;
-4. memória episódica/semântica mais rica;
-5. overlay e clientes remotos.
+3. automações proativas e scheduler;
+4. memória episódica e contexto temporal;
+5. overlay nativo do Plasma.

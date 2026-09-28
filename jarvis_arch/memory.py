@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from contextlib import closing
 import os
 import sqlite3
 import time
@@ -24,7 +25,7 @@ class MemoryStore:
         return connection
 
     def _initialize(self) -> None:
-        with self._connect() as db:
+        with closing(self._connect()) as db, db:
             db.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS conversation (
@@ -51,7 +52,7 @@ class MemoryStore:
 
     def load_history(self, limit: int = 40) -> list[dict[str, str]]:
         limit = max(1, min(int(limit), 500))
-        with self._connect() as db:
+        with closing(self._connect()) as db, db:
             rows = db.execute(
                 """
                 SELECT role, content
@@ -76,7 +77,7 @@ class MemoryStore:
             and isinstance(item.get("content"), str)
         ]
         now = int(time.time())
-        with self._connect() as db:
+        with closing(self._connect()) as db, db:
             db.execute("DELETE FROM conversation")
             db.executemany(
                 "INSERT INTO conversation(role, content, created_at) VALUES (?, ?, ?)",
@@ -85,7 +86,7 @@ class MemoryStore:
 
     def load_memory(self, query: str = "") -> dict[str, dict[str, Any]]:
         query = str(query or "").strip().lower()
-        with self._connect() as db:
+        with closing(self._connect()) as db, db:
             if query:
                 pattern = f"%{query}%"
                 rows = db.execute(
@@ -108,7 +109,7 @@ class MemoryStore:
 
     def remember(self, key: str, value: str, updated_at: int | None = None) -> None:
         timestamp = int(updated_at or time.time())
-        with self._connect() as db:
+        with closing(self._connect()) as db, db:
             db.execute(
                 """
                 INSERT INTO memory(key, value, updated_at)
@@ -121,7 +122,7 @@ class MemoryStore:
             )
 
     def replace_memory(self, memory: dict[str, Any]) -> None:
-        with self._connect() as db:
+        with closing(self._connect()) as db, db:
             db.execute("DELETE FROM memory")
         for key, item in memory.items():
             if isinstance(item, dict):
@@ -134,7 +135,7 @@ class MemoryStore:
 
     def migrate_legacy(self, history_file: Path, memory_file: Path, limit: int = 40) -> dict[str, int]:
         migrated = {"history": 0, "memory": 0}
-        with self._connect() as db:
+        with closing(self._connect()) as db, db:
             history_count = db.execute("SELECT COUNT(*) FROM conversation").fetchone()[0]
             memory_count = db.execute("SELECT COUNT(*) FROM memory").fetchone()[0]
 

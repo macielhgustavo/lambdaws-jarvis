@@ -102,6 +102,40 @@ class OllamaProvider:
         except (OSError, urllib.error.URLError):
             return False
 
+    def _native_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        native = []
+        for message in messages:
+            role = message.get("role")
+            if role == "tool":
+                native.append({"role": "tool", "content": message.get("content", "")})
+                continue
+
+            item = {
+                "role": role,
+                "content": message.get("content", ""),
+            }
+            if role == "assistant" and message.get("tool_calls"):
+                calls = []
+                for call in message["tool_calls"]:
+                    function = call.get("function", {})
+                    arguments = function.get("arguments", {})
+                    if isinstance(arguments, str):
+                        try:
+                            arguments = json.loads(arguments)
+                        except ValueError:
+                            arguments = {}
+                    calls.append(
+                        {
+                            "function": {
+                                "name": function.get("name", ""),
+                                "arguments": arguments,
+                            }
+                        }
+                    )
+                item["tool_calls"] = calls
+            native.append(item)
+        return native
+
     def complete(
         self,
         messages: list[dict[str, Any]],
@@ -112,7 +146,7 @@ class OllamaProvider:
         del reasoning_effort
         payload: dict[str, Any] = {
             "model": self.model,
-            "messages": messages,
+            "messages": self._native_messages(messages),
             "stream": False,
         }
         if tools:

@@ -6,13 +6,13 @@
  * both as children, tags their output so you can tell them apart, and shuts
  * them down together on Ctrl-C — no extra dependency, just Node.
  *
- * Pass --writes to allow JARVIS to take real actions (drive the phone, the
- * browser, send things): `npm start -- --writes`.
+ * The default brain is FreeLLMAPI. The original Claude Code bridge remains
+ * available with `npm run bridge:claude`.
  */
 
 import { spawn } from 'node:child_process'
 import process from 'node:process'
-import { cpSync, existsSync, mkdirSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
 
 /**
  * Put MediaPipe's WebAssembly where the page can actually load it.
@@ -44,8 +44,6 @@ function vendorWasm() {
   }
 }
 
-const writes = process.argv.includes('--writes')
-
 // A dim label per process, so the interleaved logs stay readable.
 const paint = (tag, colour) => (line) =>
   line
@@ -56,6 +54,27 @@ const paint = (tag, colour) => (line) =>
     .join('\n')
 
 const children = []
+
+function loadLocalEnv() {
+  if (!existsSync('.env.local')) return {}
+  const env = {}
+  for (const raw of readFileSync('.env.local', 'utf8').split(/\r?\n/)) {
+    const line = raw.trim()
+    if (!line || line.startsWith('#')) continue
+    const eq = line.indexOf('=')
+    if (eq <= 0) continue
+    const key = line.slice(0, eq).trim()
+    let value = line.slice(eq + 1).trim()
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1)
+    }
+    env[key] = value
+  }
+  return env
+}
 
 function run(name, command, args, colour, env) {
   const label = paint(name, colour)
@@ -105,7 +124,7 @@ process.on('SIGTERM', () => shutdown(0))
  * without widening what the bridge trusts by default.
  */
 const port = process.env.PORT
-const bridgeEnv = writes ? { JARVIS_ALLOW_WRITES: '1' } : {}
+const bridgeEnv = loadLocalEnv()
 if (port) {
   bridgeEnv.JARVIS_ALLOWED_ORIGINS = `http://localhost:${port},http://127.0.0.1:${port}`
   console.log(`  serving the face on port ${port}; the bridge will accept it.\n`)
@@ -114,7 +133,7 @@ if (port) {
 vendorWasm()
 
 console.log('\nJ.A.R.V.I.S. starting — the brain and the face.\n')
-run('bridge', 'node', ['bridge/server.mjs'], '36', bridgeEnv)
+run('bridge', 'node', ['bridge/freellmapi.mjs'], '36', bridgeEnv)
 // npm is a shell script on most systems; call the vite binary directly so we do
 // not need shell:true (which would break the argument handling above).
 run('face', process.execPath, ['node_modules/vite/bin/vite.js'], '35', {})

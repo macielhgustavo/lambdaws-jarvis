@@ -2,7 +2,7 @@
   "name": "jarvis",
   "private": true,
   "version": "0.0.0",
-  "description": "A browser voice assistant with an Iron Man holographic interface, driven by Claude Code through a small Node bridge.",
+  "description": "A browser voice assistant with an Iron Man holographic interface, driven by FreeLLMAPI through a small Node bridge.",
   "license": "MIT",
   "type": "module",
   "engines": {
@@ -14,8 +14,9 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "bridge": "node bridge/server.mjs",
-    "bridge:writes": "JARVIS_ALLOW_WRITES=1 node bridge/server.mjs",
+    "bridge": "node bridge/freellmapi.mjs",
+    "bridge:claude": "node bridge/server.mjs",
+    "bridge:claude:writes": "JARVIS_ALLOW_WRITES=1 node bridge/server.mjs",
     "setup": "node scripts/setup.mjs"
   },
   "dependencies": {

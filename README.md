@@ -1,30 +1,23 @@
 # J.A.R.V.I.S.
 
 A browser voice assistant with an Iron Man holographic interface. Say
-**"Hey Jarvis"**, he wakes, listens, and does real things through your tools —
-searches the web, generates images, drives your phone, reads your mail. The face
-is a web page (React + Vite + Three.js + custom GLSL). The brain is Claude Code,
-run headless as a library.
+**"Hey Jarvis"**, he wakes, listens, and answers through your local FreeLLMAPI
+router. The face is a web page (React + Vite + Three.js + custom GLSL). The
+brain is any OpenAI-compatible model pool exposed by FreeLLMAPI.
 
-**The only subscription you need is Claude Code.** No API keys, no OpenAI
-account, no cloud bill — the brain runs on your existing Claude Code login, and
-the heavy work (the model itself) runs on Anthropic's servers, so even a low-end
-laptop only has to draw the interface. **ElevenLabs is an optional add-on** that
-gives JARVIS a much better voice and sharper hearing; without it he speaks and
-listens through the browser's own speech, and everything still works.
+The default brain is FreeLLMAPI on `localhost:3001`: add your provider keys in
+that dashboard, copy the unified key, and JARVIS routes across the free models
+you enabled. **ElevenLabs is an optional add-on**; without it he speaks and
+listens through the browser's own speech.
 
 ---
 
 ## Requirements
 
-**In one line:** a Claude Code subscription, plus two free things every computer
-can have — Node.js and Chrome. That's the whole list.
+**In one line:** FreeLLMAPI, Node.js and Chrome.
 
-- **Claude Code, installed and logged in** — this is the only account you need.
-  Install it with the official method — `npm install -g @anthropic-ai/claude-code`,
-  or the platform installer at <https://docs.claude.com/en/docs/claude-code> —
-  then run `claude` once and complete login. The bridge reuses that login. **No
-  API key**, and usage is billed to your existing Claude account.
+- **FreeLLMAPI running locally** — open its dashboard, add provider keys, and
+  copy the unified API key. JARVIS expects `http://localhost:3001/v1` by default.
 - **Node.js 20 or newer** — free, one installer from <https://nodejs.org>. This
   is a Node web app, so it is the one unavoidable tool.
 - **Google Chrome or Microsoft Edge**, in a **real browser window** — not an
@@ -46,7 +39,8 @@ First, install, then start it:
 
 ```bash
 npm install
-npm start          # runs the brain and the face together
+export JARVIS_LLM_API_KEY=freellmapi-your-unified-key
+npm start          # runs the FreeLLMAPI bridge and the face together
 ```
 
 Then open the URL it prints (http://localhost:5173) in **Chrome**, click **INITIALISE**, and say **“Hey Jarvis”**.
@@ -89,28 +83,22 @@ the brain and the hands.
 
 ```
   ┌─ browser (the face) ───────────────┐        ┌─ bridge (the brain) ─────────────┐
-  │  "Hey Jarvis" wake word            │        │  Node · bridge/server.mjs        │
-  │  local VAD  →  speech to text      │   ws   │  Claude Agent SDK                │
-  │  reactor UI (Three.js + GLSL)      │◄─────► │   = Claude Code, headless        │
-  │  text to speech                    │  8787  │  spawns your MCP servers         │
-  │  heads-up display                  │        │  permission gate (decideTool)    │
+  │  "Hey Jarvis" wake word            │        │  Node · bridge/freellmapi.mjs    │
+  │  local VAD  →  speech to text      │   ws   │  FreeLLMAPI /v1 chat completions │
+  │  reactor UI (Three.js + GLSL)      │◄─────► │  OpenAI-compatible routing       │
+  │  text to speech                    │  8787  │  model fallback and free tiers   │
+  │  heads-up display                  │        │  browser speech fallback         │
   └────────────────────────────────────┘        └──────────────────────────────────┘
 ```
 
 Everything you see and hear happens in the browser. The bridge is a single Node
-process (`bridge/server.mjs`) that runs the **Claude Agent SDK**
-(`@anthropic-ai/claude-agent-sdk`) — this spawns the real `claude` CLI as a child
-process, so **the brain literally is Claude Code, headless.** They talk over a
-WebSocket (plus a few HTTP endpoints) on `ws://localhost:8787`.
+process (`bridge/freellmapi.mjs`) that calls FreeLLMAPI's
+`/v1/chat/completions` endpoint. They talk over a WebSocket plus `/health` on
+`ws://localhost:8787`.
 
-**Why a bridge at all?** A browser tab cannot spawn the local stdio MCP servers —
-`higgsfield`, `elevenlabs`, `android`, `playwright`, `exa`, `serper`, and the
-rest. The bridge can. And because it is the Agent SDK, it authenticates off your
-existing Claude Code login: no API key, billed to that same Claude account.
-
-**The model.** `claude-opus-5` at effort `medium` by default. Override with the
-`JARVIS_MODEL` and `JARVIS_EFFORT` environment variables. On startup the bridge
-prints its choice, e.g. `[jarvis] model claude-opus-5 · effort medium`.
+The default model is `auto:balanced`, which lets FreeLLMAPI choose from your
+configured providers. Override it with `JARVIS_MODEL=auto:fast`,
+`auto:smart`, `fusion`, or a concrete model id.
 
 ### The voice pipeline
 
@@ -139,8 +127,10 @@ ElevenLabs key) once at boot and picks the engines.
 
 ## What JARVIS can do
 
-Beyond answering, JARVIS reaches every MCP server in your Claude Code
-configuration, and can drive his own interface.
+Beyond answering, this default FreeLLMAPI mode gives JARVIS whatever text,
+vision, image, audio, and tool-capable models you configure in the router.
+The original Claude Code bridge is still available with `npm run bridge:claude`
+if you later want MCP tool execution.
 
 ### Your tools
 
@@ -225,14 +215,12 @@ Everything is optional in bridge mode. Frontend settings live in `.env.local`
 | Variable | Default | Effect |
 |---|---|---|
 | `JARVIS_BRIDGE_PORT` | `8787` | Port for the WebSocket + HTTP endpoints |
-| `JARVIS_MODEL` | `claude-opus-5` | Model to run |
-| `JARVIS_EFFORT` | `medium` | Reasoning effort |
-| `JARVIS_ALLOW_WRITES` | off | `1` allows effectful tools (see below) |
+| `JARVIS_LLM_BASE_URL` | `http://localhost:3001/v1` | FreeLLMAPI/OpenAI-compatible base URL |
+| `JARVIS_LLM_API_KEY` | — | FreeLLMAPI unified key from the dashboard |
+| `JARVIS_MODEL` | `auto:balanced` | FreeLLMAPI model or routing strategy |
+| `JARVIS_BRIDGE_PORT` | `8787` | Port for the WebSocket + HTTP endpoints |
 | `JARVIS_ALLOWED_ORIGINS` | local dev | Extra WebSocket origins to accept |
 | `JARVIS_ALLOW_NO_ORIGIN` | off | Accept connections with no `Origin` header |
-| `JARVIS_FILE_ROOTS` | — | Roots the `/file` endpoint may serve from |
-| `JARVIS_VOICE_ID` | — | ElevenLabs voice id |
-| `ELEVENLABS_API_KEY` | — | Optional; enables the ElevenLabs voice + Scribe |
 
 ### Frontend (`.env.local`)
 
@@ -260,22 +248,26 @@ the next boot, and both the voice and transcription upgrade automatically.
 
 ## Enabling actions
 
-The tool gate starts **read-only**. Search, generation and lookups run freely;
-anything effectful — send, tap, delete, install, pay — is denied. Voice is a poor
-interface for a confirmation dialog, so the decision is made ahead of time in
-`decideTool()` in `bridge/server.mjs`, not at the moment of use. The bridge sets
-`settingSources: []`, which makes its own gate the only authority — filesystem
-settings and any global `bypassPermissions` cannot override it.
+The default FreeLLMAPI bridge is an inference bridge: it sends the conversation
+to your configured FreeLLMAPI router and streams the answer back to the UI.
+Local actions such as browser driving, filesystem edits, phone control, and MCP
+execution belong to the optional Claude Code bridge.
 
-To allow effectful tools (phone, browser driving, sending), run the bridge this
-way instead:
+If you later install and log into Claude Code, you can run the original bridge:
 
 ```bash
-npm run bridge:writes
+npm run bridge:claude
 ```
 
-> Read `decideTool()` before you do. *"Hey Jarvis, clean up my downloads folder"*
-> means something rather different with writes enabled.
+To allow effectful Claude Code tools, run:
+
+```bash
+npm run bridge:claude:writes
+```
+
+> Read `decideTool()` in `bridge/server.mjs` before you do. *"Hey Jarvis,
+> clean up my downloads folder"* means something rather different with writes
+> enabled.
 
 ---
 
@@ -295,7 +287,7 @@ terminal, and that nothing else is holding port `8787`.
 
 ## Security
 
-All of this lives in `bridge/server.mjs`:
+The default FreeLLMAPI bridge lives in `bridge/freellmapi.mjs`. The original Claude Code bridge lives in `bridge/server.mjs`:
 
 - The WebSocket accepts only local dev origins (add more with
   `JARVIS_ALLOWED_ORIGINS`).

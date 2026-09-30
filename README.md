@@ -42,6 +42,20 @@ jarvis-ui
 systemctl --user status lambdaws-jarvis.service
 ```
 
+## Interface web holografica
+
+A nova pasta `web/` traz a interface React/Three.js do projeto MIT
+`adewaskar/jarvis`, adaptada para conversar com o daemon Python local.
+
+```bash
+cd web
+npm install
+npm start
+```
+
+Abra a URL do Vite em Chrome ou Edge, clique em `INITIALISE` e diga
+`Hey Jarvis`.
+
 ## Arquitetura
 
 ```text

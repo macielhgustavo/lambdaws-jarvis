@@ -10,3 +10,9 @@ data/
 .env
 secrets.env
 *.secret
+
+web/node_modules/
+web/dist/
+web/dist-ssr/
+web/public/mediapipe/
+web/*.local

@@ -1,0 +1,13 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "//": "autoPort is off on purpose. The bridge only accepts WebSocket origins on localhost:5173-5199 and 4173-4199, so a port picked outside that range starts a face that looks alive and can never reach the brain.",
+      "name": "lambdaws-jarvis-web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["start"],
+      "port": 5180,
+      "autoPort": false
+    }
+  ]
+}

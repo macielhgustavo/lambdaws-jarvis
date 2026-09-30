@@ -5,6 +5,7 @@ import {
   TTS_ENGINE,
   KOKORO_VOICE,
   BRIDGE_HTTP_URL,
+  TTS_LANGUAGE,
 } from '../config'
 import * as kokoro from './kokoro'
 import { caps } from './capabilities'
@@ -177,6 +178,13 @@ function score(v: SpeechSynthesisVoice): number {
   const n = v.name.toLowerCase()
   let s = 0
 
+  // Prefer Brazilian Portuguese when available; fall back to the old English
+  // JARVIS-like voices on systems without a pt-BR voice installed.
+  if (/^pt[-_]br/i.test(v.lang)) s += 120
+  else if (/^pt/i.test(v.lang)) s += 95
+
+  if (/\b(google portugu[eê]s do brasil|luciana|felipe|rafael|daniel portugu[eê]s|portugu[eê]s)\b/.test(n)) s += 70
+
   // The macOS British male, and the closest thing to the character available
   // without leaving the machine.
   if (n.startsWith('daniel')) s += 100
@@ -189,8 +197,10 @@ function score(v: SpeechSynthesisVoice): number {
   if (n.includes('premium')) s += 30
   else if (n.includes('enhanced')) s += 20
 
-  if (/en[-_]gb/i.test(v.lang)) s += 25
-  else if (/^en/i.test(v.lang)) s += 5
+  if (/^pt[-_]br/i.test(v.lang)) s += 35
+  else if (/^pt/i.test(v.lang)) s += 20
+  else if (/en[-_]gb/i.test(v.lang)) s += 10
+  else if (/^en/i.test(v.lang)) s += 3
 
   // Voices that clearly aren't a butler.
   if (/grandma|grandpa|bubbles|jester|bells|boing|whisper|zarvox|superstar|trinoids|wobble|bahh|organ|cellos|bad news|good news/.test(n)) {
@@ -212,7 +222,7 @@ const USABLE = 40
 export function candidateVoices(): SpeechSynthesisVoice[] {
   return speechSynthesis
     .getVoices()
-    .filter((v) => /^en/i.test(v.lang))
+    .filter((v) => /^(pt|en)/i.test(v.lang))
     .map((v) => ({ v, s: score(v) }))
     .filter((x) => x.s >= USABLE)
     .sort((a, b) => b.s - a.s)
@@ -236,7 +246,7 @@ function pickVoice(): SpeechSynthesisVoice | null {
     localStorage.removeItem(VOICE_PREF_KEY)
   }
 
-  cachedVoice = candidateVoices()[0] ?? all.find((v) => /^en/i.test(v.lang)) ?? null
+  cachedVoice = candidateVoices()[0] ?? all.find((v) => /^pt[-_]br/i.test(v.lang)) ?? all.find((v) => /^pt/i.test(v.lang)) ?? all.find((v) => /^en/i.test(v.lang)) ?? null
   return cachedVoice
 }
 
@@ -477,7 +487,7 @@ export function createSpeaker(): Speaker {
       const u = new SpeechSynthesisUtterance(text)
       const voice = pickVoice()
       if (voice) u.voice = voice
-      u.lang = voice?.lang ?? 'en-GB'
+      u.lang = voice?.lang ?? TTS_LANGUAGE
       // Deliberate, and deliberately invariant — the character's pace does not
       // change with stakes, and that steadiness is most of the effect. This
       // lands around 130 wpm, below the median for film dialogue.

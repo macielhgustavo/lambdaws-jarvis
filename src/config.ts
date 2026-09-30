@@ -75,6 +75,14 @@ export const BRIDGE_WS_URL = str(import.meta.env.VITE_BRIDGE_URL) ?? 'ws://local
 export const BRIDGE_HTTP_URL = BRIDGE_WS_URL.replace(/^ws/, 'http')
 
 /**
+ * Spoken language for browser speech recognition and speech synthesis.
+ * Chrome uses BCP-47 tags here; pt-BR makes JARVIS understand Brazilian
+ * Portuguese instead of trying to hear English words in a Portuguese sentence.
+ */
+export const SPEECH_LANGUAGE = str(import.meta.env.VITE_SPEECH_LANGUAGE) ?? 'pt-BR'
+export const TTS_LANGUAGE = str(import.meta.env.VITE_TTS_LANGUAGE) ?? SPEECH_LANGUAGE
+
+/**
  * Speech output engine.
  *
  * false (default) — the browser's own speechSynthesis. Runs on-device, so

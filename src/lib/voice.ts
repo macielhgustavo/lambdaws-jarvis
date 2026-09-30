@@ -1,4 +1,4 @@
-import { BRIDGE_HTTP_URL } from '../config'
+import { BRIDGE_HTTP_URL, SPEECH_LANGUAGE } from '../config'
 import { getMic } from './audio'
 import { speakingNow, speakingSince } from './tts'
 import { startVad, type Vad } from './vad'
@@ -78,7 +78,7 @@ const WAKE_DEBOUNCE = 1500
  * indication why. Better a rare false wake than a name that does not answer.
  */
 const WAKE =
-  /\b(?:hey|hi|ok|okay|yo)?\s*(?:jarvis|jarvys|jervis|jarvis's|travis|jarviss|java's|jarv)\b(?!'s)/i
+  /\b(?:hey|hi|ok|okay|yo|ei|oi|ol[aá]|e\s*a[ií])?\s*(?:jarvis|jarvys|jervis|jarvis's|travis|jarviss|java's|jarv|j[aá]rvis|jervis)\b(?!'s)/i
 
 /** Everything after the wake phrase, which is usually the actual command. */
 function afterWake(text: string): string {
@@ -123,7 +123,7 @@ function afterWake(text: string): string {
  * last word of a real request.
  */
 const CONTINUES =
-  /\b(and|or|but|so|because|since|if|when|while|that|which|who|whose|to|of|in|on|at|by|for|with|from|about|into|onto|over|under|between|through|the|a|an|my|your|his|her|its|our|their|is|are|was|were|be|been|do|does|did|have|has|had|can|could|would|should|will|shall|might|must|like|than|then|as|very|really|just|some|any|all|both|either|neither)$/i
+  /\b(and|or|but|so|because|since|if|when|while|that|which|who|whose|to|of|in|on|at|by|for|with|from|about|into|onto|over|under|between|through|the|a|an|my|your|his|her|its|our|their|is|are|was|were|be|been|do|does|did|have|has|had|can|could|would|should|will|shall|might|must|like|than|then|as|very|really|just|some|any|all|both|either|neither|e|ou|mas|porque|se|quando|enquanto|que|quem|qual|quais|para|pra|de|do|da|dos|das|em|no|na|nos|nas|por|com|sobre|entre|o|a|os|as|um|uma|meu|minha|seu|sua|nosso|nossa|é|são|foi|foram|ser|estar|tenho|tem|pode|poderia|deve|deveria|vai|vou|muito|só|algum|alguma|todo|toda)$/i
 
 /** Trailing punctuation a transcriber emits mid-thought. */
 const TRAILS = /[,;:–—-]$/
@@ -257,7 +257,7 @@ function makeAssembler(h: {
 const norm = (s: string) =>
   s
     .toLowerCase()
-    .replace(/[^a-z0-9' ]+/g, ' ')
+    .replace(/[^a-z0-9À-ÖØ-öø-ÿ' ]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
 
@@ -267,7 +267,7 @@ const norm = (s: string) =>
  * would be the single most infuriating failure this file could have.
  */
 const OVERRIDE =
-  /\b(stop|wait|jarvis|cancel|enough|quiet|hold on|shut up|never ?mind|forget it|no)\b/i
+  /\b(stop|wait|jarvis|cancel|enough|quiet|hold on|shut up|never ?mind|forget it|no|para|pare|espera|calma|cancela|chega|sil[eê]ncio|quieto|esquece|não)\b/i
 
 /**
  * Words too common to be evidence of anything.
@@ -284,7 +284,11 @@ const STOP = new Set(
     'our their what which who how why when where do does did can could would ' +
     'should will shall not no yes if then than as about into over under out up ' +
     'down one two three first second third now here there just very really got ' +
-    'get have has had say said tell me okay ok well right').split(' '),
+    'get have has had say said tell me okay ok well right ' +
+    'o a os as um uma uns umas e ou mas de do da dos das para pra em no na ' +
+    'nos nas por com sem sobre que quem qual quais eu você voce ele ela nós nos ' +
+    'eles elas meu minha seu sua nosso nossa isso esse essa estes estas aqui ali ' +
+    'agora sim não nao ok certo beleza então entao só so muito pouco').split(' '),
 )
 
 /**
@@ -603,7 +607,7 @@ function startBrowserVoice(h: VoiceHandlers): Voice {
   const Ctor =
     (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition
   if (!Ctor) {
-    h.onError('This browser has no speech recognition — use Chrome or Edge, or add an ElevenLabs key.')
+    h.onError('Este navegador não oferece reconhecimento de fala. Abra o Jarvis no Google Chrome ou Microsoft Edge em http://localhost:5173.')
     return { stop: () => {}, live: () => false }
   }
 
@@ -760,7 +764,7 @@ function startBrowserVoice(h: VoiceHandlers): Voice {
     rec = new Ctor()
     rec.continuous = true
     rec.interimResults = true
-    rec.lang = 'en-GB'
+    rec.lang = SPEECH_LANGUAGE
     rec.onstart = () => {
       running = true
       diag.running = true

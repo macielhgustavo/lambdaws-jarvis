@@ -1,14 +1,13 @@
 /**
- * One command to run LambdaWS JARVIS: the bridge (brain) and the Vite dev server (face)
+ * One command to run JARVIS: the bridge (brain) and the Vite dev server (face)
  * together, so a student types `npm start` and nothing else.
  *
  * Two long-running processes normally mean two terminals. This launcher spawns
  * both as children, tags their output so you can tell them apart, and shuts
  * them down together on Ctrl-C — no extra dependency, just Node.
  *
- * This launcher uses the local Python Jarvis daemon through
- * bridge/lambdaws-server.mjs. The original Claude Code bridge is still
- * available with `npm run bridge:claude`.
+ * Pass --writes to allow JARVIS to take real actions (drive the phone, the
+ * browser, send things): `npm start -- --writes`.
  */
 
 import { spawn } from 'node:child_process'
@@ -44,6 +43,8 @@ function vendorWasm() {
     console.warn(`  could not vendor the hand-tracking runtime: ${err.message}`)
   }
 }
+
+const writes = process.argv.includes('--writes')
 
 // A dim label per process, so the interleaved logs stay readable.
 const paint = (tag, colour) => (line) =>
@@ -104,7 +105,7 @@ process.on('SIGTERM', () => shutdown(0))
  * without widening what the bridge trusts by default.
  */
 const port = process.env.PORT
-const bridgeEnv = {}
+const bridgeEnv = writes ? { JARVIS_ALLOW_WRITES: '1' } : {}
 if (port) {
   bridgeEnv.JARVIS_ALLOWED_ORIGINS = `http://localhost:${port},http://127.0.0.1:${port}`
   console.log(`  serving the face on port ${port}; the bridge will accept it.\n`)
@@ -112,8 +113,8 @@ if (port) {
 
 vendorWasm()
 
-console.log('\nLambdaWS J.A.R.V.I.S. starting — the brain and the face.\n')
-run('bridge', 'node', ['bridge/lambdaws-server.mjs'], '36', bridgeEnv)
+console.log('\nJ.A.R.V.I.S. starting — the brain and the face.\n')
+run('bridge', 'node', ['bridge/server.mjs'], '36', bridgeEnv)
 // npm is a shell script on most systems; call the vite binary directly so we do
 // not need shell:true (which would break the argument handling above).
 run('face', process.execPath, ['node_modules/vite/bin/vite.js'], '35', {})
